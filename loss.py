@@ -1,6 +1,6 @@
-from mutual_information_estimators import estimate_mutual_information
+from mutual_information_estimators import smile_estimate_mutual_information
 
-def Psi_loss(X_t0, X_t1, f_supervenient, causal_decoupling_critic, downward_causation_critic, device):
+def Psi_loss(X_t0, X_t1, f_supervenient, causal_decoupling_critic, downward_causation_critic, device, clip):
     """
     params:
         X_t0: (batch_size, 6) tensor representing a batch of 6-digit bit strings at time t
@@ -19,12 +19,22 @@ def Psi_loss(X_t0, X_t1, f_supervenient, causal_decoupling_critic, downward_caus
     V_t0 = f_supervenient(X_t0)
     V_t1 = f_supervenient(X_t1)
 
+    print("V_t0")
+    print(V_t0)
+    print(V_t0.shape)
+    print("V_t1")
+    print(V_t1)
+    print(V_t1.shape)
+    print('--------------------------')
+
     # compute the MI between V_t0 and V_t1
-    causal_decoupling_MI = estimate_mutual_information('smile', V_t0, V_t1, causal_decoupling_critic, device)
+    causal_decoupling_MI = smile_estimate_mutual_information(V_t0, V_t1, causal_decoupling_critic, device, clip=clip)
 
     # compute the MI between V_t1 and each individual bit of X_t0
     downward_causation_MI = 0
     for i in range(6):
-        downward_causation_MI += estimate_mutual_information('smile', V_t1, X_t0[:, i], downward_causation_critic, device)
+        print(f"X_t0[:, {i}]")
+        print(X_t0[:, i])
+        downward_causation_MI += smile_estimate_mutual_information(V_t1, X_t0[:, i], downward_causation_critic, device, clip=clip)
     
     return causal_decoupling_MI - downward_causation_MI

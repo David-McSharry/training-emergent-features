@@ -41,11 +41,11 @@ class BitStringDataset(Dataset):
 
 if __name__ == "__main__":
     # Create the Dataset
-    dataset = BitStringDataset(gamma_parity=0.99, gamma_extra=0.99, length=10000)
+    dataset = BitStringDataset(gamma_parity=0.99, gamma_extra=0.99, length=1000000)
 
 
     # save the dataset
-    torch.save(dataset.data, 'bit_string_dataset.pth')
+    torch.save(dataset.data, 'data/bit_string_dataset.pth')
 
     # make the dataset into a dataloader
     # dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
