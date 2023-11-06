@@ -8,11 +8,13 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import wandb
 
-from utils import sample_correlated_gaussian
 from estimators import estimate_mutual_information
 
-dataset = torch.load('bit_string_dataset.pth')
-trainloader = torch.utils.data.DataLoader(dataset, batch_size=100, shuffle=True)
+
+batch_size = 100
+
+dataset = torch.load('bit_string_dataset_gp=0.99_ge=0.99_n=3000000.pth')
+trainloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
 
 def compare_parities(timestep1, timestep2):
@@ -24,26 +26,25 @@ def compare_extra_bit_parity(timestep1, timestep2):
     return timestep1[-1] == timestep2[-1]
 
 
-count = 0
-parity_count = 0
-extra_parity_count = 0
-one_count = 0
-for batch in trainloader:
-    for i in range(1, len(batch)):
-        if compare_parities(batch[i][0], batch[i][1]):
-            parity_count += 1
-        if compare_extra_bit_parity(batch[i][0], batch[i][1]):
-            extra_parity_count += 1
-        if batch[i][0][-1] == 1:
-            one_count += 1
-        count += 1
+# count = 0
+# parity_count = 0
+# extra_parity_count = 0
+# one_count = 0
+# for batch in trainloader:
+#     for i in range(1, len(batch)):
+#         if compare_parities(batch[i][0], batch[i][1]):
+#             parity_count += 1
+#         if compare_extra_bit_parity(batch[i][0], batch[i][1]):
+#             extra_parity_count += 1
+#         if batch[i][0][-1] == 1:
+#             one_count += 1
+#         count += 1
 
-print("Parity count: ", parity_count)
-print("Extra parity count: ", extra_parity_count)
-print("Total count: ", count)
+# print("len dataset: ", count)
 
-print("Parity percentage: ", parity_count/count)
-print("Extra parity percentage: ", extra_parity_count/count)
+# print("Parity percentage: ", parity_count/count)
+# print("Extra parity percentage: ", extra_parity_count/count)
+# print("One percentage: ", one_count/count)
 
 
 # %%
@@ -71,18 +72,23 @@ class SeparableCritic(nn.Module):
     
 
     def forward(self, x, y):
-        
-        x = x.unsqueeze(1)
-        y = y.unsqueeze(1)
         scores = torch.matmul(self._h(y), self._g(x).t())
         return scores
 
 
+print(SeparableCritic(1,1))
+
+# %%
+
+# import F
+import torch.nn.functional as F
+
+print(F.one_hot(torch.tensor([0,1,2,3,4,5])))
 # %%
 
 
 def train_estimator(dataloader, **kwargs):
-    critic = SeparableCritic(1,1)
+    critic = SeparableCritic(1,7)
 
     optimizer = optim.Adam(critic.parameters(), lr=1e-4)
 
@@ -92,12 +98,20 @@ def train_estimator(dataloader, **kwargs):
 
     for batch in dataloader:
         x = batch[:,0]
-        y = batch[:,1]
+        y = batch[:,1].unsqueeze(2)
 
-        last_digit_x = x[:, -1]
-        last_digit_y = y[:, -1]
+        batch_len = x.shape[0]
 
-        # estimate mutual information
+        one_hot_encoding = F.one_hot(torch.tensor([0,1,2,3,4,5])).unsqueeze(0).repeat(batch_len, 1, 1)
+        y_with_one_hot = torch.cat((y, one_hot_encoding), dim=2)
+
+        last_digit_x = x[:, -1].unsqueeze(1)
+        last_digit_y = y_with_one_hot[:, -1]
+
+        print(last_digit_x.shape)
+        print(last_digit_y.shape)
+
+        break
         mi = estimate_mutual_information('smile', last_digit_x, last_digit_y, critic, **kwargs)
 
         # compute loss
@@ -116,37 +130,7 @@ def train_estimator(dataloader, **kwargs):
 
 
 
-train_estimator(trainloader, clip = 1)
+train_estimator(trainloader, clip = 10)
 
-
-# %%
-
-data_params = {
-    'dim': 1,
-    'batch_size': 64,
-    'cubic': None
-}
-
-critic_params = {
-    'dim': 1,
-    'layers': 2,
-    'embed_dim': 32,
-    'hidden_dim': 256,
-    'activation': 'relu',
-}
-
-opt_params = {
-    'iterations': 20000,
-    'learning_rate': 5e-4,
-}
-
-
-
-
-x, y = sample_correlated_gaussian(
-    dim=data_params['dim'], rho=0, batch_size=data_params['batch_size'], cubic=data_params['cubic'])
-
-print(x.shape)
-print(y.shape)
 
 # %%

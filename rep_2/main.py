@@ -5,14 +5,18 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import wandb
+from datetime import datetime
+from tqdm import tqdm
 
 
-from utils import *
 from estimators import estimate_mutual_information
 
-# define the dimension of the Gaussian
+batch_size = 100
 
-dim = 1
+dataset = torch.load('bit_string_dataset_gp=0.99_ge=0.99_n=3000000.pth')
+trainloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
+
 
 class SupervenientFeatureNetwork(nn.Module):
     def __init__(self):
@@ -28,128 +32,134 @@ class SupervenientFeatureNetwork(nn.Module):
     def forward(self, x):
         return self.layers(x)
     
-class ConcatCritic(nn.Module):
-    """Concat critic, where we concat the inputs and use one MLP to output the value."""
+class SeparableCritic(nn.Module):
+    """Separable critic. where the output value is g(x) h(y). """
 
-    def __init__(self, dim, **extra_kwargs):
-        super(ConcatCritic, self).__init__()
-        # output is scalar score
-        # input dim is 2 * dim, then hidden layer 128 dim, then hidden layer 64 dim, then hidden layer 8 dim, then output layer 1 dim
-        self._f = nn.Sequential(
-            nn.Linear(2 * dim, 128),
+    def __init__(self, input_dim1, input_dim2):
+        super(SeparableCritic, self).__init__()
+        self._g = nn.Sequential(
+            nn.Linear(input_dim1, 128),
             nn.ReLU(),
             nn.Linear(128, 64),
             nn.ReLU(),
             nn.Linear(64, 8),
-            nn.ReLU(),
-            nn.Linear(8, 1),
         )
+        self._h = nn.Sequential(
+            nn.Linear(input_dim2, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Linear(64, 8),
+        )
+    
 
     def forward(self, x, y):
-        batch_size = x.size(0)
-        if len(y.shape) == 1:
-            y = y.unsqueeze(1)
-        # Tile all possible combinations of x and y
-        x_tiled = torch.stack([x] * batch_size, dim=0)
-        y_tiled = torch.stack([y] * batch_size, dim=1)
-        # xy is [batch_size * batch_size, x_dim + y_dim]
-        xy_pairs = torch.reshape(torch.cat((x_tiled, y_tiled), dim=2), [
-                                 batch_size * batch_size, -1])
-        # Compute scores for each x_i, y_j pair.
-        scores = self._f(xy_pairs)
-        return torch.reshape(scores, [batch_size, batch_size]).t()
-
-
-
+        scores = torch.matmul(self._h(y), self._g(x).t())
+        return scores
+    
+class MainNetwork(nn.Module):
+    def __init__(self):
+        super(MainNetwork, self).__init__()
+        self.supervenient_feature_network = SupervenientFeatureNetwork()
+        self.critic_g = SeparableCritic(1, 1)
+        self.critic_h = SeparableCritic(1, 7)
+        
 
 # %%
 
-def train_estimator(critic_params, data_params, mi_params, opt_params, **kwargs):
+
+def train_model(dataloader, **kwargs):
     """Main training loop that estimates time-varying MI."""
 
-    critic_h = ConcatCritic(1).to(device='cpu')
-    critic_g = ConcatCritic(1).to(device='cpu')
+    model = MainNetwork().to('cpu')
 
-    supervenient_feature_network = SupervenientFeatureNetwork().to(device='cpu')
+    run_id = datetime.now().strftime("%Y%m%d-%H%M%S")
 
-    wandb.init(project="training-emergent-features", id="test")
+    wandb.init(project="training-emergent-features", id=run_id)
 
-    opt_crit_h = optim.Adam(critic_h.parameters(), lr=opt_params['learning_rate'])
-    opt_crit_g = optim.Adam(critic_g.parameters(), lr=opt_params['learning_rate'])
-    opt_supervenient_feature_network = optim.Adam(supervenient_feature_network.parameters(), lr=opt_params['learning_rate'])
 
-    def train_step(X0, X1, **kwargs):
+    # track gradients in our three models to make sure they are being updated
+    wandb.watch(model.critic_h)
+    wandb.watch(model.critic_g)
+    wandb.watch(model.supervenient_feature_network)
+
+    opt_crit_h = optim.Adam(model.critic_h.parameters(), lr=1e-4)
+    opt_crit_g = optim.Adam(model.critic_g.parameters(), lr=1e-4)
+    opt_supervenient_feature_network = optim.Adam(model.supervenient_feature_network.parameters(), lr=1e-4)
+
+    for batch in dataloader:
+        x1 = batch[:,0]
+        x0 = batch[:,1]
+
+        batch_len = x1.shape[0]
+        
+        one_hot_encoding = F.one_hot(torch.tensor([0,1,2,3,4,5])).unsqueeze(0).repeat(batch_len, 1, 1)
+        x0_with_one_hot = torch.cat((x0.unsqueeze(2), one_hot_encoding), dim=2)
+        
+        V0 = model.supervenient_feature_network(x1)
+        V1 = model.supervenient_feature_network(x0)
+
+        digit_0_x0_with_one_hot = x0_with_one_hot[:, 0]
+        digit_1_x0_with_one_hot = x0_with_one_hot[:, 1]
+        digit_2_x0_with_one_hot = x0_with_one_hot[:, 2]
+        digit_3_x0_with_one_hot = x0_with_one_hot[:, 3]
+        digit_4_x0_with_one_hot = x0_with_one_hot[:, 4]
+        last_digit_x0_with_one_hot = x0_with_one_hot[:, 5]
+
+        psi = 0
+
+        psi += estimate_mutual_information('smile', V0, V1, model.critic_g, **kwargs)
+
+        eps = 1e-5
+        # psi -= eps * estimate_mutual_information('smile', V1, digit_0_x0_with_one_hot, model.critic_h, **kwargs)
+        # psi -= eps * estimate_mutual_information('smile', V1, digit_1_x0_with_one_hot, model.critic_h, **kwargs)
+        # psi -= eps * estimate_mutual_information('smile', V1, digit_2_x0_with_one_hot, model.critic_h, **kwargs)
+        # psi -= eps * estimate_mutual_information('smile', V1, digit_3_x0_with_one_hot, model.critic_h, **kwargs)
+        # psi -= eps * estimate_mutual_information('smile', V1, digit_4_x0_with_one_hot, model.critic_h, **kwargs)
+        # psi -= eps * estimate_mutual_information('smile', V1, last_digit_x0_with_one_hot, model.critic_h, **kwargs)
+
+        # compute loss
+        loss = psi
+
+        # backprop
         opt_crit_h.zero_grad()
         opt_crit_g.zero_grad()
         opt_supervenient_feature_network.zero_grad()
+        loss.backward()
 
-        V0 = supervenient_feature_network(X0)
-        V1 = supervenient_feature_network(X1)
-
-        causal_decoupling_MI = estimate_mutual_information('smile', V0, V1, critic_h, **kwargs)
-        
-        downward_causation_MI = 0
-        for i in range(6):
-            downward_causation_MI += estimate_mutual_information('smile', V1, X0[:, i], critic_g, **kwargs)
-
-        Psi_loss = - (causal_decoupling_MI - downward_causation_MI)
-
-        # normalize the weights
-        # l2_lambda = 0.01
-        # l2_reg = torch.tensor(0.)
-        # for param in critic_h.parameters():
-        #     l2_reg += torch.norm(param)
-        # for param in critic_g.parameters():
-        #     l2_reg += torch.norm(param)
-        # for param in supervenient_feature_network.parameters():
-        #     l2_reg += torch.norm(param)
-        # Psi_loss += l2_lambda * l2_reg
-
-
-        wandb.log({"Psi loss": Psi_loss})
-
-        Psi_loss.backward()
         opt_crit_h.step()
         opt_crit_g.step()
         opt_supervenient_feature_network.step()
 
-        return Psi_loss
-
-
-    dataset = torch.load('data/bit_string_dataset.pth')
-    trainloader = torch.utils.data.DataLoader(dataset, batch_size=100, shuffle=True)
-
-    estimates = []
-    for batch in trainloader:
-        mi = train_step(batch[:,0], batch[:,1], **kwargs)
-        mi = mi.detach().cpu().numpy()
-        estimates.append(mi)
-
+        wandb.log({'Psi': psi.item()})
+    
     wandb.finish()
 
-    return np.array(estimates)
+    return model
+
+
+model = train_model(trainloader, clip = 10)
+
+
 
 
 # %%
-data_params = {
-    'dim': 1,
-    'batch_size': 100, # not used
-    'cubic': None  # not used
-}
 
-critic_params = {
-    'dim': 1,
-    'layers': 1, # not used
-    'embed_dim': 32, # not used
-    'hidden_dim': 256, # not used
-    'activation': 'relu', # not used
-}
 
-opt_params = {
-    'iterations': 20000, # not used
-    'learning_rate': 1e-4,
-}
+f = model.supervenient_feature_network
+with torch.no_grad():
+    for batch in trainloader:
+        x0 = batch[:15,0]
+        x1 = batch[:15,1]
 
+        V0 = f(x0)
+        V1 = f(x1)
+
+        print(V0)
+        print(V1)
+        print(x0)
+        print(x1)
+        break
 
 
 # %%
@@ -162,7 +172,7 @@ for critic_type in ['concat']:
     estimator = 'smile'
     for i, clip in enumerate([999]):
         mi_params = dict(estimator=estimator, critic=critic_type, baseline='unnormalized')
-        mis = train_estimator(critic_params, data_params, mi_params, opt_params, clip=clip)
+        mis = train_model(critic_params, data_params, mi_params, opt_params, clip=clip)
         mi_numpys[critic_type][f'{estimator}_{clip}'] = mis
 
 
