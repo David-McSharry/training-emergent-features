@@ -1,179 +1,149 @@
 # %%
-import numpy as np
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-import wandb
-from datetime import datetime
-from tqdm import tqdm
 
+from trainers import (train_model,
+                        train_extra_bit_decoder,
+                        train_parity_bit_decoder,
+                        train_unsimilar_model)
 
-from estimators import estimate_mutual_information
 
 batch_size = 100
 
 dataset = torch.load('bit_string_dataset_gp=0.99_ge=0.99_n=3000000.pth')
 trainloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
-
-
-
-class SupervenientFeatureNetwork(nn.Module):
-    def __init__(self):
-        super(SupervenientFeatureNetwork, self).__init__()
-        self.layers = nn.Sequential(
-            nn.Linear(6, 64),
-            nn.ReLU(),
-            nn.Linear(64, 16),
-            nn.ReLU(),
-            nn.Linear(16, 1)
-        )
-
-    def forward(self, x):
-        return self.layers(x)
-    
-class SeparableCritic(nn.Module):
-    """Separable critic. where the output value is g(x) h(y). """
-
-    def __init__(self, input_dim1, input_dim2):
-        super(SeparableCritic, self).__init__()
-        self._g = nn.Sequential(
-            nn.Linear(input_dim1, 128),
-            nn.ReLU(),
-            nn.Linear(128, 64),
-            nn.ReLU(),
-            nn.Linear(64, 8),
-        )
-        self._h = nn.Sequential(
-            nn.Linear(input_dim2, 128),
-            nn.ReLU(),
-            nn.Linear(128, 64),
-            nn.ReLU(),
-            nn.Linear(64, 8),
-        )
-    
-
-    def forward(self, x, y):
-        scores = torch.matmul(self._h(y), self._g(x).t())
-        return scores
-    
-class MainNetwork(nn.Module):
-    def __init__(self):
-        super(MainNetwork, self).__init__()
-        self.supervenient_feature_network = SupervenientFeatureNetwork()
-        self.critic_g = SeparableCritic(1, 1)
-        self.critic_h = SeparableCritic(1, 7)
         
-
-# %%
-
-
-def train_model(dataloader, **kwargs):
-    """Main training loop that estimates time-varying MI."""
-
-    model = MainNetwork().to('cpu')
-
-    run_id = datetime.now().strftime("%Y%m%d-%H%M%S")
-
-    wandb.init(project="training-emergent-features", id=run_id)
-
-
-    # track gradients in our three models to make sure they are being updated
-    wandb.watch(model.critic_h)
-    wandb.watch(model.critic_g)
-    wandb.watch(model.supervenient_feature_network)
-
-    opt_crit_h = optim.Adam(model.critic_h.parameters(), lr=1e-4)
-    opt_crit_g = optim.Adam(model.critic_g.parameters(), lr=1e-4)
-    opt_supervenient_feature_network = optim.Adam(model.supervenient_feature_network.parameters(), lr=1e-4)
-
-    for batch in dataloader:
-        x1 = batch[:,0]
-        x0 = batch[:,1]
-
-        batch_len = x1.shape[0]
-        
-        one_hot_encoding = F.one_hot(torch.tensor([0,1,2,3,4,5])).unsqueeze(0).repeat(batch_len, 1, 1)
-        x0_with_one_hot = torch.cat((x0.unsqueeze(2), one_hot_encoding), dim=2)
-        
-        V0 = model.supervenient_feature_network(x1)
-        V1 = model.supervenient_feature_network(x0)
-
-        digit_0_x0_with_one_hot = x0_with_one_hot[:, 0]
-        digit_1_x0_with_one_hot = x0_with_one_hot[:, 1]
-        digit_2_x0_with_one_hot = x0_with_one_hot[:, 2]
-        digit_3_x0_with_one_hot = x0_with_one_hot[:, 3]
-        digit_4_x0_with_one_hot = x0_with_one_hot[:, 4]
-        last_digit_x0_with_one_hot = x0_with_one_hot[:, 5]
-
-        psi = 0
-
-        psi += estimate_mutual_information('smile', V0, V1, model.critic_g, **kwargs)
-
-        eps = 1e-5
-        # psi -= eps * estimate_mutual_information('smile', V1, digit_0_x0_with_one_hot, model.critic_h, **kwargs)
-        # psi -= eps * estimate_mutual_information('smile', V1, digit_1_x0_with_one_hot, model.critic_h, **kwargs)
-        # psi -= eps * estimate_mutual_information('smile', V1, digit_2_x0_with_one_hot, model.critic_h, **kwargs)
-        # psi -= eps * estimate_mutual_information('smile', V1, digit_3_x0_with_one_hot, model.critic_h, **kwargs)
-        # psi -= eps * estimate_mutual_information('smile', V1, digit_4_x0_with_one_hot, model.critic_h, **kwargs)
-        # psi -= eps * estimate_mutual_information('smile', V1, last_digit_x0_with_one_hot, model.critic_h, **kwargs)
-
-        # compute loss
-        loss = psi
-
-        # backprop
-        opt_crit_h.zero_grad()
-        opt_crit_g.zero_grad()
-        opt_supervenient_feature_network.zero_grad()
-        loss.backward()
-
-        opt_crit_h.step()
-        opt_crit_g.step()
-        opt_supervenient_feature_network.step()
-
-        wandb.log({'Psi': psi.item()})
-    
-    wandb.finish()
-
-    return model
-
-
-model = train_model(trainloader, clip = 10)
-
+torch.autograd.set_detect_anomaly(True)
 
 
 
 # %%
 
 
-f = model.supervenient_feature_network
+f, g, h = train_model(trainloader, clip = 5)
+
+# # save model A
+# from datetime import datetime
+
+# id = datetime.now().strftime("%Y%m%d-%H%M%S")
+
+# torch.save(model_A.state_dict(), f'model_A_{id}.pt')
+
+# %%
+
+# import model A
+
+from models import MainNetwork
+
+model_A = MainNetwork()
+model_A.load_state_dict(torch.load('model_A_20231107-183320.pt'))
+model_A.eval()
+
+# %%
+
+model_B = train_unsimilar_model(model_A, trainloader, 0.02, clip = 5)
+
+from datetime import datetime
+
+id = datetime.now().strftime("%Y%m%d-%H%M%S")
+
+torch.save(model_B.state_dict(), f'model_B_{id}.pt')
+
+
+# %%
+
+
+# testing model_B_20231107-180733 - the one that output 3 different shit
+
+# load the model
+model_B = MainNetwork()
+model_B.load_state_dict(torch.load('model_B_20231107-180733.pt'))
+model_B.eval()
+
+
+
+
+
+
+# %%
+import matplotlib.pyplot as plt
+import numpy as np
+
+f = model_B.supervenient_feature_network
+
+with torch.no_grad():
+    for batch in trainloader:
+        x0 = batch[:100,0]
+        x1 = batch[:100,1]
+
+        V1 = f(x1)
+
+        for i in range(100):
+            # round Ve
+
+
+            print(f"{round(float(V1.squeeze()[i]),2)} - {np.sum(np.array(x1[i][:5]))} - {x1[i][-1]}")
+        # plot a histogram of the values in V1
+        plt.hist(V1.flatten(), bins=9)
+        # print the height of the bins
+        plt.ylabel('Frequency')
+        plt.xlabel('supervenient feature value')
+        plt.show()
+        break
+# %%
+
+extra_bit_decoder = train_extra_bit_decoder(trainloader, f)
+
+parity_bit_decoder = train_parity_bit_decoder(trainloader, f)
+
+
+# %%
+
+# test the extra_bit decoder
+f = model_A.supervenient_feature_network
+
+with torch.no_grad():
+    for batch in trainloader:
+        x0 = batch[:6,0]
+        x1 = batch[:6,1]
+
+        V1 = f(x1)
+
+        extra_bits = x1[:,-1].unsqueeze(1)
+
+        print(extra_bits)
+        print(torch.round(extra_bit_decoder(V1)))
+        # print the accuracy of the decoder vs the extra bits ground truth
+        print((torch.round(extra_bit_decoder(V1)) == extra_bits).float().mean())
+        break
+# %%
+
+
+# test the parity_bit decoder
+
+f = model_A.supervenient_feature_network
+
 with torch.no_grad():
     for batch in trainloader:
         x0 = batch[:15,0]
         x1 = batch[:15,1]
 
-        V0 = f(x0)
         V1 = f(x1)
 
-        print(V0)
-        print(V1)
-        print(x0)
-        print(x1)
+        parity_batch = torch.sum(x1[:,:5], dim=1) % 2
+
+        for i in range(15):
+            # round Ve
+
+
+            print(f"{round(float(V1.squeeze()[i]),2)} - {parity_batch[i]}")
+
+        # print(parity_batch)
+        # print(torch.round(parity_bit_decoder(V1)))
+        # print the accuracy of the decoder vs the extra bits ground truth
+        # print((torch.round(parity_bit_decoder(V1)) == parity_batch).float().mean())
         break
-
-
-# %%
-
-mi_numpys = dict()
-
-for critic_type in ['concat']:
-    mi_numpys[critic_type] = dict()
-
-    estimator = 'smile'
-    for i, clip in enumerate([999]):
-        mi_params = dict(estimator=estimator, critic=critic_type, baseline='unnormalized')
-        mis = train_model(critic_params, data_params, mi_params, opt_params, clip=clip)
-        mi_numpys[critic_type][f'{estimator}_{clip}'] = mis
-
+    
 
 # %%
+
+
