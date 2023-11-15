@@ -8,6 +8,67 @@ from models import Decoder
 import torch.nn as nn
 from estimators import estimate_mutual_information
 
+def get_sum_margininal_MIs(critic_h, x0_one_hot, x1, f, **kwargs):
+    """
+    A loss function that returns the sum of the MIs between a supervenient feature
+    V1 = f(x1) and each digit of the 6 binary digits
+
+    args:
+        critic_h: critic for the marginal MI
+        x0_one_hot: digits at time t with one hot encoding
+        x1: digits at time t+1
+        f: function that maps x1 to V1
+    
+    returns:
+        loss: sum of the MIs between V1 and each digit
+    """
+    sum_margininal_MIs = 0
+    V1 = f(x1)
+    for i in range(6):
+        sum_margininal_MIs += estimate_mutual_information('smile', V1, x0_one_hot[:, i], critic_h, **kwargs)
+    return sum_margininal_MIs
+
+
+def get_individual_h_loss(critic_h, x0_one_hot_digit, x1, f, **kwargs):
+    """
+    A loss function that returns the MI between V1 and a single digit of the 6 binary digits at time t
+    with a one hot encoding
+
+    args:
+        critic_h: critic for the marginal MI
+        x0_one_hot_digit: digit at time t with one hot encoding
+        x1: digits at time t+1
+        f: function that maps x1 to V1
+    
+    returns:
+        loss: MI between V1 and the digit
+    """
+    V1 = f(x1)
+    marginal_MI = estimate_mutual_information('smile', V1, x0_one_hot_digit, critic_h, **kwargs)
+    loss = - marginal_MI
+    return loss
+
+
+def get_V_mutual_info(critic_g, x0, x1, f, **kwargs):
+    V1 = f(x1)
+    V0 = f(x0)
+    V_mutual_info = estimate_mutual_information('smile', V0, V1, critic_g, **kwargs)
+    return V_mutual_info
+
+
+def get_psi(critic_h, critic_g, x0, x0_with_one_hot, x1, f, **kwargs):
+    V1 = f(x1)
+    V0 = f(x0)
+
+    V_mutual_info = estimate_mutual_information('smile', V0, V1, critic_g, **kwargs)
+
+    sum_marginal_mutual_info = 0
+    for i in range(6):
+        sum_marginal_mutual_info += estimate_mutual_information('smile', V1, x0_with_one_hot[:, i], critic_h, **kwargs)
+
+    psi = V_mutual_info - sum_marginal_mutual_info
+
+    return psi
 
 
 def train_model(dataloader, **kwargs):
@@ -17,10 +78,12 @@ def train_model(dataloader, **kwargs):
 
     args:
         dataloader: dataloader for the dataset
-        clip: clip value for the critic
+        clip: clip value for the critic (in kwargs)
     
     returns:
-    ...
+        supervenient_feature_network: trained f
+        critic_g: trained critic for the joint MI
+        critic_h: trained critic for the marginal MI
     """
 
     critic_h = SeparableCritic(1, 7)
@@ -38,9 +101,8 @@ def train_model(dataloader, **kwargs):
 
     opt_crit_h = optim.Adam(critic_h.parameters(), lr=1e-4)
     opt_crit_g = optim.Adam(critic_g.parameters(), lr=1e-4)
-    opt_supervenient_feature_network = optim.Adam(supervenient_feature_network.parameters(), lr=1e-4)
+    opt_supervenient_feature_network = optim.Adam(supervenient_feature_network.parameters(), lr=1e-5)
     
-    count = 0
     for batch in dataloader:
         x0 = batch[:,0]
         x1 = batch[:,1]
@@ -50,65 +112,38 @@ def train_model(dataloader, **kwargs):
         one_hot_encoding = F.one_hot(torch.tensor([0,1,2,3,4,5])).unsqueeze(0).repeat(batch_len, 1, 1)
         x0_with_one_hot = torch.cat((x0.unsqueeze(2), one_hot_encoding), dim=2)
 
+
         # h
 
-        for i in range(6):
-            V1 = supervenient_feature_network(x1)
-            marginal_mutual_info = estimate_mutual_information('smile', V1, x0_with_one_hot[:, i], critic_h, **kwargs)
-            h_loss = - marginal_mutual_info
-            opt_crit_h.zero_grad()
-            h_loss.backward(retain_graph=True)
-            opt_crit_h.step()
-            print(f" marginal information for the {i}th bit: {marginal_mutual_info.item()}")
-            if i == 5:
-                wandb.log({'extra bit MI': marginal_mutual_info.item()})
+        sum_margininal_MIs = get_sum_margininal_MIs(critic_h, x0_with_one_hot, x1, supervenient_feature_network, **kwargs)
+        h_loss = - sum_margininal_MIs
+        opt_crit_h.zero_grad()
+        h_loss.backward(retain_graph=True)
+        opt_crit_h.step()
+
 
         # g
 
-        V1 = supervenient_feature_network(x1)
-        V0 = supervenient_feature_network(x0)
-        V_mutual_info = estimate_mutual_information('smile', V0, V1, critic_g, **kwargs)
-
+        V_mutual_info = get_V_mutual_info(critic_g, x0, x1, supervenient_feature_network, **kwargs)
         g_loss = - V_mutual_info
-
         opt_crit_g.zero_grad()
         g_loss.backward(retain_graph=True)
         opt_crit_g.step()
 
+
         # f
 
-        if count % 1 == 0 or count < 100:
-            print(f"YES!! TRAIN fffffffffff: {count}")
-            V1 = supervenient_feature_network(x1)
-            V0 = supervenient_feature_network(x0)
-            # psi -= max(estimate_mutual_information('smile', V1, digit_0_x0_with_one_hot, model.critic_h, **kwargs), 0)
-            # psi -= max(estimate_mutual_information('smile', V1, digit_1_x0_with_one_hot, model.critic_h, **kwargs), 0)
-            # psi -= max(estimate_mutual_information('smile', V1, digit_2_x0_with_one_hot, model.critic_h, **kwargs), 0)
-            # psi -= max(estimate_mutual_information('smile', V1, digit_3_x0_with_one_hot, model.critic_h, **kwargs), 0)
-            # psi -= max(estimate_mutual_information('smile', V1, digit_4_x0_with_one_hot, model.critic_h, **kwargs), 0)
-            # psi  -= max(estimate_mutual_information('smile', V1, last_digit_x0_with_one_hot, model.critic_h, **kwargs), 0)
+        psi = get_psi(critic_h, critic_g, x0, x0_with_one_hot, x1, supervenient_feature_network, **kwargs)
+        f_loss = - psi
 
-            V_mutual_info = estimate_mutual_information('smile', V0, V1, critic_g, **kwargs)
+        opt_supervenient_feature_network.zero_grad()
+        f_loss.backward()
+        opt_supervenient_feature_network.step()
 
-            # marginal_mutual_info = 0
-            # for i in range(6):
-            #     marginal_mutual_info += estimate_mutual_information('smile', V1, x0_with_one_hot[:, i], critic_h, **kwargs)
-
-            psi = V_mutual_info
-
-            f_loss = - psi
-
-            opt_supervenient_feature_network.zero_grad()
-            f_loss.backward()
-            opt_supervenient_feature_network.step()
-
-        count += 1
-        print(f"count: {count}")
-
-
-        wandb.log({'V mutual info': V_mutual_info.item()})
-        wandb.log({'Marginal mutual info': marginal_mutual_info.item()})
         wandb.log({'Psi': psi.item()})
+        wandb.log({'Sum of Marginal MIs': sum_margininal_MIs.item()})
+        wandb.log({'V Mutual Info': V_mutual_info.item()})
+
     
     wandb.finish()
 
@@ -218,7 +253,6 @@ def train_unsimilar_model(
     wandb.finish()
 
     return model
-
 
 
 def train_extra_bit_decoder(dataloader, f_network):

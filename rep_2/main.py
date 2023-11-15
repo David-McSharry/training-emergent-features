@@ -7,11 +7,10 @@ from trainers import (train_model,
                         train_unsimilar_model)
 
 
-batch_size = 100
+batch_size = 1000
 
-dataset = torch.load('bit_string_dataset_gp=0.99_ge=0.99_n=3000000.pth')
+dataset = torch.load('bit_string_dataset_gp=0.99_ge=0.5_n=30000000.pth')
 trainloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
-        
 torch.autograd.set_detect_anomaly(True)
 
 
@@ -21,12 +20,12 @@ torch.autograd.set_detect_anomaly(True)
 
 f, g, h = train_model(trainloader, clip = 5)
 
-# # save model A
+# %%
+# save model A
 # from datetime import datetime
 
-# id = datetime.now().strftime("%Y%m%d-%H%M%S")
 
-# torch.save(model_A.state_dict(), f'model_A_{id}.pt')
+torch.save(f.state_dict(), f'learned_parity_bit_f.pt')
 
 # %%
 
@@ -119,8 +118,6 @@ with torch.no_grad():
 
 
 # test the parity_bit decoder
-
-f = model_A.supervenient_feature_network
 
 with torch.no_grad():
     for batch in trainloader:

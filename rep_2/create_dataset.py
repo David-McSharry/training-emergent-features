@@ -42,50 +42,50 @@ class BitStringDataset(Dataset):
 if __name__ == "__main__":
     # Create the Dataset
     gamma_parity = 0.99
-    gamma_extra = 0.99
-    n = 3000000
+    gamma_extra = 0.5
+    n = 30000000
     dataset = BitStringDataset(gamma_parity=gamma_parity, gamma_extra=gamma_extra, length=n)
 
 
     # save the dataset
     torch.save(dataset.data, f'smile_test/bit_string_dataset_gp={gamma_parity}_ge={gamma_extra}_n={n}.pth')
 
-    # make the dataset into a dataloader
-    dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
+    # # make the dataset into a dataloader
+    # dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
 
-    for batch in dataloader:
-        print(batch)
-        break
+    # for batch in dataloader:
+    #     print(batch)
+    #     break
 
-    # loda the dataset creaetede above
+    # # loda the dataset creaetede above
 
-    print(f'bit_string_dataset_gp={gamma_parity}_ge={gamma_extra}_n={n}.pth')
-    bit_strings = torch.load(f'smile_test/bit_string_dataset_gp={gamma_parity}_ge={gamma_extra}_n={n}.pth')
+    # print(f'bit_string_dataset_gp={gamma_parity}_ge={gamma_extra}_n={n}.pth')
+    # bit_strings = torch.load(f'smile_test/bit_string_dataset_gp={gamma_parity}_ge={gamma_extra}_n={n}.pth')
 
 
-    def compare_parities(timestep1, timestep2):
-        parity1 = torch.sum(timestep1[:-1]) % 2
-        parity2 = torch.sum(timestep2[:-1]) % 2
-        return parity1 == parity2
+    # def compare_parities(timestep1, timestep2):
+    #     parity1 = torch.sum(timestep1[:-1]) % 2
+    #     parity2 = torch.sum(timestep2[:-1]) % 2
+    #     return parity1 == parity2
 
-    def compare_extra_bit_parity(timestep1, timestep2):
-        return timestep1[-1] == timestep2[-1]
+    # def compare_extra_bit_parity(timestep1, timestep2):
+    #     return timestep1[-1] == timestep2[-1]
 
-    # # Parameters
-    # gamma_parity = 0.8
-    # gamma_extra = 0.8
-    # length = 1000  # Length of the sequence
+    # # # Parameters
+    # # gamma_parity = 0.8
+    # # gamma_extra = 0.8
+    # # length = 1000  # Length of the sequence
 
-    # Generate the dataset
-    # bit_strings = dataset.generate_bit_string(gamma_parity, gamma_extra, length + 1)
+    # # Generate the dataset
+    # # bit_strings = dataset.generate_bit_string(gamma_parity, gamma_extra, length + 1)
 
-    parities_count = 0
-    extra_parity_count = 0
-    # Check that the parity is preserved
-    for bit_string_pair in bit_strings:
-        parities_count += (compare_parities(bit_string_pair[0], bit_string_pair[1]))
-        extra_parity_count += (compare_extra_bit_parity(bit_string_pair[0], bit_string_pair[1]))  
+    # parities_count = 0
+    # extra_parity_count = 0
+    # # Check that the parity is preserved
+    # for bit_string_pair in bit_strings:
+    #     parities_count += (compare_parities(bit_string_pair[0], bit_string_pair[1]))
+    #     extra_parity_count += (compare_extra_bit_parity(bit_string_pair[0], bit_string_pair[1]))  
 
-    print(parities_count/ (len(bit_strings)-1))
-    print(extra_parity_count/ (len(bit_strings)-1))
-    print(len(bit_strings))
+    # print(parities_count/ (len(bit_strings)-1))
+    # print(extra_parity_count/ (len(bit_strings)-1))
+    # print(len(bit_strings))
