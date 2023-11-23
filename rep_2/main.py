@@ -4,14 +4,24 @@ import torch
 from trainers import (train_model,
                         train_extra_bit_decoder,
                         train_parity_bit_decoder,
-                        train_unsimilar_model)
-
+                        train_unsimilar_model,
+                        train_extra_bit_decoder,
+                        train_parity_bit_decoder,
+                        train_correlated_bit_critic
+                    )
+# packages may have been fucked up and need to be reinstalled :()
 
 batch_size = 1000
 
-dataset = torch.load('bit_string_dataset_gp=0.99_ge=0.5_n=30000000.pth')
+dataset = torch.load('datasets/bit_string_dataset_gp=0.99_ge=0.5_n=3e7.pth')
 trainloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
 torch.autograd.set_detect_anomaly(True)
+
+
+# %%
+
+g = train_correlated_bit_critic(trainloader)
+
 
 
 
@@ -20,7 +30,61 @@ torch.autograd.set_detect_anomaly(True)
 
 f, g, h = train_model(trainloader, clip = 5)
 
+
 # %%
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # save model A
 # from datetime import datetime
 
@@ -39,7 +103,7 @@ model_A.eval()
 
 # %%
 
-model_B = train_unsimilar_model(model_A, trainloader, 0.02, clip = 5)
+model_B = train_unsimilar_model(model_A, trainloader, 0.02, clip = 2)
 
 from datetime import datetime
 
