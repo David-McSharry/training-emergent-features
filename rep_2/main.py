@@ -13,103 +13,43 @@ from trainers import (train_model,
 
 batch_size = 1000
 
-dataset = torch.load('datasets/bit_string_dataset_gp=0.99_ge=0.5_n=3e7.pth')
+dataset = torch.load('datasets/bit_string_dataset_gp=0.99_ge=0.99_n=3e7.pth')
 trainloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
-torch.autograd.set_detect_anomaly(True)
-
-
-# %%
-
-g = train_correlated_bit_critic(trainloader)
-
-
 
 
 # %%
 
 
-f, g, h = train_model(trainloader, clip = 5)
+f = train_model(trainloader)
+
+
 
 
 # %%
 
+# g = train_correlated_bit_critic(trainloader)
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# %%
 
 
 # save model A
 # from datetime import datetime
 
 
-torch.save(f.state_dict(), f'learned_parity_bit_f.pt')
+torch.save(f.state_dict(), f'winner_save_v2.pt')
+
 
 # %%
 
-# import model A
+# model_B = train_unsimilar_model(model_A, trainloader, 0.02, clip = 2)
 
-from models import MainNetwork
+# from datetime import datetime
 
-model_A = MainNetwork()
-model_A.load_state_dict(torch.load('model_A_20231107-183320.pt'))
-model_A.eval()
+# id = datetime.now().strftime("%Y%m%d-%H%M%S")
 
-# %%
-
-model_B = train_unsimilar_model(model_A, trainloader, 0.02, clip = 2)
-
-from datetime import datetime
-
-id = datetime.now().strftime("%Y%m%d-%H%M%S")
-
-torch.save(model_B.state_dict(), f'model_B_{id}.pt')
+# torch.save(model_B.state_dict(), f'model_B_{id}.pt')
 
 
 # %%
@@ -117,10 +57,10 @@ torch.save(model_B.state_dict(), f'model_B_{id}.pt')
 
 # testing model_B_20231107-180733 - the one that output 3 different shit
 
-# load the model
-model_B = MainNetwork()
-model_B.load_state_dict(torch.load('model_B_20231107-180733.pt'))
-model_B.eval()
+# # load the model
+# model_B = MainNetwork()
+# model_B.load_state_dict(torch.load('model_B_20231107-180733.pt'))
+# model_B.eval()
 
 
 
@@ -162,12 +102,11 @@ parity_bit_decoder = train_parity_bit_decoder(trainloader, f)
 # %%
 
 # test the extra_bit decoder
-f = model_A.supervenient_feature_network
 
 with torch.no_grad():
     for batch in trainloader:
-        x0 = batch[:6,0]
-        x1 = batch[:6,1]
+        x0 = batch[:100,0]
+        x1 = batch[:100,1]
 
         V1 = f(x1)
 
@@ -185,8 +124,8 @@ with torch.no_grad():
 
 with torch.no_grad():
     for batch in trainloader:
-        x0 = batch[:15,0]
-        x1 = batch[:15,1]
+        x0 = batch[:100,0]
+        x1 = batch[:100,1]
 
         V1 = f(x1)
 

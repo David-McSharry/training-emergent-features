@@ -25,38 +25,62 @@ class SupervenientFeatureNetwork(nn.Module):
     #     return torch.cat(output_tensors, dim=0)
     
     
-class SeparableCritic(nn.Module):
+class PredSeparableCritic(nn.Module):
     """Separable critic. where the output value is g(x) h(y). """
 
-    def __init__(self, input_dim1, input_dim2):
-        super(SeparableCritic, self).__init__()
-        self._g = nn.Sequential(
-            nn.Linear(input_dim1, 128),
-            nn.ReLU(),
-            nn.Linear(128, 64),
-            nn.ReLU(),
-            nn.Linear(64, 8),
-        )
-        self._h = nn.Sequential(
-            nn.Linear(input_dim2, 128),
-            nn.ReLU(),
-            nn.Linear(128, 64),
-            nn.ReLU(),
-            nn.Linear(64, 8),
-        )
-
-    def forward(self, x, y):
-        scores = torch.matmul(self._h(y), self._g(x).t())
-        return scores
-
-
-class MainNetwork(nn.Module):
     def __init__(self):
-        super(MainNetwork, self).__init__()
-        self.supervenient_feature_network = SupervenientFeatureNetwork()
-        self.critic_g = SeparableCritic(1, 1)
-        self.critic_h = SeparableCritic(1, 7)
+        super(PredSeparableCritic, self).__init__()
+        self.v_encoder = nn.Sequential(
+            nn.Linear(1, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Linear(64, 8),
+        )
 
+        self.W = nn.Linear(8, 8, bias=False)
+
+    def forward(self, v0, v1):
+        v0_encoded = self.v_encoder(v0)
+        v1_encoded = self.v_encoder(v1)
+        v1_encoded_transformed = self.W(v1_encoded)
+
+        scores = torch.matmul(v0_encoded, v1_encoded_transformed.t())
+        return scores
+    
+
+class MarginalSeparableCritic(nn.Module):
+    """Separable critic. where the output value is g(x) h(y). """
+
+    def __init__(self):
+        super(MarginalSeparableCritic, self).__init__()
+        self.v_encoder = nn.Sequential(
+            nn.Linear(1, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Linear(64, 8),
+        )
+
+        self.xi_encoder = nn.Sequential(
+            nn.Linear(7, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Linear(64, 8),
+        )
+
+        self.W = nn.Linear(8, 8, bias=False)
+
+    def forward(self, x0i, v1):
+        v1_encoded = self.v_encoder(v1)
+        x0i_encoded = self.xi_encoder(x0i)
+        v1_encoded_transformed = self.W(v1_encoded)
+
+        scores = torch.matmul(x0i_encoded, v1_encoded_transformed.t())
+
+        return scores
+        
 
 class Decoder(nn.Module):
     def __init__(self):

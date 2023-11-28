@@ -1,8 +1,9 @@
 import torch
 
-def estimate_MI_smile(x, y, critic, clip):
+# we want y to be v always
+def estimate_MI_smile(scores):
 
-    scores = critic(x, y)
+    clip = 10
 
     first_term = scores.diag().mean()
 
@@ -14,7 +15,7 @@ def estimate_MI_smile(x, y, critic, clip):
     # e^clipped_scores
     exp_clipped_scores = torch.exp(clipped_scores)
 
-    mask = torch.ones_like(exp_clipped_scores) - torch.eye(batch_size).to(device=x.device)
+    mask = torch.ones_like(exp_clipped_scores) - torch.eye(batch_size).to(device=exp_clipped_scores.device)
 
     masked_exp_clipped_scores = exp_clipped_scores * mask
 
@@ -24,4 +25,4 @@ def estimate_MI_smile(x, y, critic, clip):
 
     second_term = torch.log2(mean_exp_clipped_scores)
 
-    return (1/torch.log(torch.tensor(2.0)))* first_term - second_term
+    return (1/torch.log(torch.tensor(2.0))) * first_term - second_term

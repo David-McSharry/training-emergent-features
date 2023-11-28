@@ -3,105 +3,56 @@ import torch.nn.functional as F
 import torch.optim as optim
 import wandb
 from datetime import datetime
-from models import SeparableCritic, SupervenientFeatureNetwork
+from models import SupervenientFeatureNetwork, PredSeparableCritic, MarginalSeparableCritic
 from models import Decoder
 import torch.nn as nn
 from tqdm import tqdm
 from custom_estimators import estimate_MI_smile
 
-def get_sum_margininal_MIs(critic_h, x0_one_hot, x1, f, **kwargs):
+def get_sum_margininal_MIs(marginal_critic, x0_one_hot, x1, f):
     """
     A loss function that returns the sum of the MIs between a supervenient feature
     V1 = f(x1) and each digit of the 6 binary digits
-
-    args:
-        critic_h: critic for the marginal MI
-        x0_one_hot: digits at time t with one hot encoding
-        x1: digits at time t+1
-        f: function that maps x1 to V1
-    
-    returns:
-        loss: sum of the MIs between V1 and each digit
     """
     sum_margininal_MIs = 0
     V1 = f(x1)
     for i in range(6):
-        sum_margininal_MIs += estimate_MI_smile( V1, x0_one_hot[:, i], critic_h, clip=5)
+        scores = marginal_critic(x0_one_hot[:,i], V1)
+        sum_margininal_MIs += estimate_MI_smile(scores)
     return sum_margininal_MIs
 
 
-def get_marginal_MI_last_bit(critic_h, x0_one_hot, x1, f, **kwargs):
+def get_V_mutual_info(pred_critic, x0, x1, f):
     """
-    A loss function that returns the sum of the MIs between a supervenient feature
-    V1 = f(x1) and each digit of the 6 binary digits
-
-    args:
-        critic_h: critic for the marginal MI
-        x0_one_hot: digits at time t with one hot encoding
-        x1: digits at time t+1
-        f: function that maps x1 to V1
-    
-    returns:
-        loss: sum of the MIs between V1 and each digit
+    A loss function that returns the MI between a supervenient feature
+    V1 = f(x1) and the supervenient feature V0 = f(x0)
     """
-    V1 = f(x1)
-    marginal_MI = estimate_MI_smile(V1, x0_one_hot[:, -1], critic_h, clip=5)
-    return marginal_MI
-
-
-def get_V_mutual_info(critic_g, x0, x1, f, **kwargs):
     V1 = f(x1)
     V0 = f(x0)
-    V_mutual_info = estimate_MI_smile(V0, V1, critic_g, clip=5)
+    scores = pred_critic(V0, V1)
+    V_mutual_info = estimate_MI_smile(scores)
     return V_mutual_info
 
 
-def get_psi(critic_h, critic_g, x0, x0_with_one_hot, x1, f, **kwargs):
-    V1 = f(x1)
-    V0 = f(x0)
+def train_model(dataloader):
 
-    V_mutual_info = estimate_MI_smile(V0, V1, critic_g, clip=5)
-
-    sum_marginal_mutual_info = 0
-    for i in range(6):
-        sum_marginal_mutual_info += estimate_MI_smile(V1, x0_with_one_hot[:, i], critic_h, clip=5)
-
-    psi = V_mutual_info - sum_marginal_mutual_info
-
-    return psi
-
-
-def train_model(dataloader, **kwargs):
-    """
-    function that takes in a dataloader and a clip value, and 
-    trains a model as in figure 1 of causally emergent parity
-
-    args:
-        dataloader: dataloader for the dataset
-        clip: clip value for the critic (in kwargs)
-    
-    returns:
-        supervenient_feature_network: trained f
-        critic_g: trained critic for the joint MI
-        critic_h: trained critic for the marginal MI
-    """
-
-    critic_h = SeparableCritic(1, 7)
-    critic_g = SeparableCritic(1, 1)
-    supervenient_feature_network = SupervenientFeatureNetwork()
+    pred_critic = PredSeparableCritic()
+    marginal_critic = MarginalSeparableCritic()
+    f = SupervenientFeatureNetwork()
 
     run_id = datetime.now().strftime("%Y%m%d-%H%M%S")
 
     wandb.init(project="training-emergent-features", id=run_id)
 
     # track gradients in our three models to make sure they are being updated
-    wandb.watch(critic_h)
-    wandb.watch(critic_g)
-    wandb.watch(supervenient_feature_network)
+    wandb.watch(pred_critic)
+    wandb.watch(marginal_critic)
+    wandb.watch(f)
 
-    opt_crit_h = optim.Adam(critic_h.parameters(), lr=1e-4)
-    opt_crit_g = optim.Adam(critic_g.parameters(), lr=1e-4)
-    opt_supervenient_feature_network = optim.Adam(supervenient_feature_network.parameters(), lr=1e-5)
+    # init optimizer
+    opt_pred = optim.Adam(pred_critic.parameters(), lr=1e-4)
+    opt_marginal = optim.Adam(marginal_critic.parameters(), lr=1e-4)
+    opt_f = optim.Adam(f.parameters(), lr=1e-5)
     
     for batch in tqdm(dataloader):
         x0 = batch[:,0]
@@ -110,39 +61,41 @@ def train_model(dataloader, **kwargs):
         batch_len = x1.shape[0]
 
         one_hot_encoding = F.one_hot(torch.tensor([0,1,2,3,4,5])).unsqueeze(0).repeat(batch_len, 1, 1)
-        x0_with_one_hot = torch.cat((x0.unsqueeze(2), one_hot_encoding), dim=2)
+        x0_with_one_hot = torch.cat((x0.unsqueeze(2), one_hot_encoding), dim=2) # (batch_size, 6, 7)
 
-        critic_h.zero_grad()
-        critic_g.zero_grad()
-        supervenient_feature_network.zero_grad()
+        f.zero_grad()
+        pred_critic.zero_grad()
+        marginal_critic.zero_grad()
+
+
+        # pred terms
+
+        V_mutual_info = get_V_mutual_info(pred_critic, x0, x1, f)
+        g_loss = - V_mutual_info
+
+        opt_pred.zero_grad()
+        g_loss.backward(retain_graph=True)
+        opt_pred.step()
+
+
+        # marginal terms
+
+        sum_margininal_MIs = get_sum_margininal_MIs(marginal_critic, x0_with_one_hot, x1, f)
+        marginal_loss = - sum_margininal_MIs
+
+        opt_marginal.zero_grad()
+        marginal_loss.backward(retain_graph=True)
+        opt_marginal.step()
 
 
         # f
 
-        psi = get_psi(critic_h, critic_g, x0, x0_with_one_hot, x1, supervenient_feature_network, **kwargs)
+        psi = get_V_mutual_info(pred_critic, x0, x1, f) - get_sum_margininal_MIs(marginal_critic, x0_with_one_hot, x1, f)
         f_loss = - psi
 
-        opt_supervenient_feature_network.zero_grad()
+        opt_f.zero_grad()
         f_loss.backward()
-        opt_supervenient_feature_network.step()
-
-
-        # h
-
-        sum_margininal_MIs = get_sum_margininal_MIs(critic_h, x0_with_one_hot, x1, supervenient_feature_network, **kwargs)
-        h_loss = - sum_margininal_MIs
-        opt_crit_h.zero_grad()
-        h_loss.backward(retain_graph=True)
-        opt_crit_h.step()
-
-
-        # g
-
-        V_mutual_info = get_V_mutual_info(critic_g, x0, x1, supervenient_feature_network, **kwargs)
-        g_loss = - V_mutual_info
-        opt_crit_g.zero_grad()
-        g_loss.backward(retain_graph=True)
-        opt_crit_g.step()
+        opt_f.step()
 
 
         wandb.log({'Psi': psi.item()})
@@ -152,7 +105,7 @@ def train_model(dataloader, **kwargs):
 
     wandb.finish()
 
-    return supervenient_feature_network, critic_g, critic_h
+    return f
 
 
 def CKA_function(X, Y):
