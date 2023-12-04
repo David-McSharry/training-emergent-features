@@ -14,16 +14,7 @@ class SupervenientFeatureNetwork(nn.Module):
 
     def forward(self, x):
         return self.f(x)
-
-    # think harder about this if it is needed    
-    # def get_feature_Hilbert_rep(self, dataloader):
-    #     """Get the feature Hilbert representation of the dataset and return it as one tensor"""
-    #     output_tensors = []
-    #     for batch in dataloader:
-    #         x0 = batch[:,0]
-    #         output_tensors.append(self.f(x0))
-    #     return torch.cat(output_tensors, dim=0)
-    
+        
     
 class PredSeparableCritic(nn.Module):
     """Separable critic. where the output value is g(x) h(y). """

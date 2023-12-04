@@ -1,10 +1,9 @@
 import torch
 
-# we want y to be v always
-def estimate_MI_smile(scores):
-
-    clip = 10
-
+def estimate_MI_smile(scores, clip):
+    """
+    Returns the MI estimate using the SMILE estimator given the scores matrix and a clip
+    """
     first_term = scores.diag().mean()
 
     batch_size = scores.size(0)

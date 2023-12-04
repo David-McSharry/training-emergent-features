@@ -55,87 +55,89 @@ if __name__ == "__main__":
 
     bit_strings = torch.load(f'rep_2/datasets/bit_string_dataset_gp=0.99_ge=0.99_n=3e6.pth')
 
+
+
     print(len(bit_strings))
-    print(bit_strings.shape)
+    # print(bit_strings.shape)
 
-    dataloader = DataLoader(bit_strings, batch_size=200, shuffle=True)
+    # dataloader = DataLoader(bit_strings, batch_size=100, shuffle=True)
 
-    for batch in dataloader:
-        bit_strings = batch
-        break
-
-
-    def compare_parities(timestep1, timestep2):
-        parity1 = torch.sum(timestep1[:-1]) % 2
-        parity2 = torch.sum(timestep2[:-1]) % 2
-        return parity1 == parity2
-
-    def compare_extra_bit_parity(timestep1, timestep2):
-        return timestep1[-1] == timestep2[-1]
-
-    equal_parities_count = 0
-    equal_extra_parity_count = 0
-
-    num_0_0 = 0
-    num_0_1 = 0
-    num_1_0 = 0
-    num_1_1 = 0
-
-    num_0s_pos_0 = 0
-    num_0s_pos_1 = 0
-    num_1s_pos_0 = 0
-    num_1s_pos_1 = 0
+    # for batch in dataloader:
+    #     bit_strings = batch
+    #     break
 
 
-    for bit_string_pair in bit_strings:
-        equal_parities_count += (compare_parities(bit_string_pair[0], bit_string_pair[1]))
-        equal_extra_parity_count += (compare_extra_bit_parity(bit_string_pair[0], bit_string_pair[1])) 
-        if bit_string_pair[0][-1] == 0 and bit_string_pair[1][-1] == 0:
-            num_0_0 += 1
-        elif bit_string_pair[0][-1] == 0 and bit_string_pair[1][-1] == 1:
-            num_0_1 += 1
-        elif bit_string_pair[0][-1] == 1 and bit_string_pair[1][-1] == 0:
-            num_1_0 += 1
-        elif bit_string_pair[0][-1] == 1 and bit_string_pair[1][-1] == 1:
-            num_1_1 += 1
+    # def compare_parities(timestep1, timestep2):
+    #     parity1 = torch.sum(timestep1[:-1]) % 2
+    #     parity2 = torch.sum(timestep2[:-1]) % 2
+    #     return parity1 == parity2
+
+    # def compare_extra_bit_parity(timestep1, timestep2):
+    #     return timestep1[-1] == timestep2[-1]
+
+    # equal_parities_count = 0
+    # equal_extra_parity_count = 0
+
+    # num_0_0 = 0
+    # num_0_1 = 0
+    # num_1_0 = 0
+    # num_1_1 = 0
+
+    # num_0s_pos_0 = 0
+    # num_0s_pos_1 = 0
+    # num_1s_pos_0 = 0
+    # num_1s_pos_1 = 0
+
+
+    # for bit_string_pair in bit_strings:
+    #     equal_parities_count += (compare_parities(bit_string_pair[0], bit_string_pair[1]))
+    #     equal_extra_parity_count += (compare_extra_bit_parity(bit_string_pair[0], bit_string_pair[1])) 
+    #     if bit_string_pair[0][-1] == 0 and bit_string_pair[1][-1] == 0:
+    #         num_0_0 += 1
+    #     elif bit_string_pair[0][-1] == 0 and bit_string_pair[1][-1] == 1:
+    #         num_0_1 += 1
+    #     elif bit_string_pair[0][-1] == 1 and bit_string_pair[1][-1] == 0:
+    #         num_1_0 += 1
+    #     elif bit_string_pair[0][-1] == 1 and bit_string_pair[1][-1] == 1:
+    #         num_1_1 += 1
         
-        if bit_string_pair[0][-1] == 0:
-            num_0s_pos_0 += 1
-        elif bit_string_pair[0][-1] == 1:
-            num_1s_pos_0 += 1
-        if bit_string_pair[1][-1] == 0:
-            num_0s_pos_1 += 1
-        elif bit_string_pair[1][-1] == 1:
-            num_1s_pos_1 += 1
+    #     if bit_string_pair[0][-1] == 0:
+    #         num_0s_pos_0 += 1
+    #     elif bit_string_pair[0][-1] == 1:
+    #         num_1s_pos_0 += 1
+    #     if bit_string_pair[1][-1] == 0:
+    #         num_0s_pos_1 += 1
+    #     elif bit_string_pair[1][-1] == 1:
+    #         num_1s_pos_1 += 1
         
-    p_same_extra_bit = equal_extra_parity_count / len(bit_strings)
+    # p_same_extra_bit = equal_extra_parity_count / len(bit_strings)
 
-    p_0_0 = num_0_0 / len(bit_strings)
-    p_0_1 = num_0_1 / len(bit_strings)
-    p_1_0 = num_1_0 / len(bit_strings)
-    p_1_1 = num_1_1 / len(bit_strings)
+    # p_0_0 = num_0_0 / len(bit_strings)
+    # p_0_1 = num_0_1 / len(bit_strings)
+    # p_1_0 = num_1_0 / len(bit_strings)
+    # p_1_1 = num_1_1 / len(bit_strings)
 
-    p_0_pos_0 = num_0s_pos_0 / len(bit_strings)
-    p_0_pos_1 = num_0s_pos_1 / len(bit_strings)
-    p_1_pos_0 = num_1s_pos_0 / len(bit_strings)
-    p_1_pos_1 = num_1s_pos_1 / len(bit_strings)
+    # p_0_pos_0 = num_0s_pos_0 / len(bit_strings)
+    # p_0_pos_1 = num_0s_pos_1 / len(bit_strings)
+    # p_1_pos_0 = num_1s_pos_0 / len(bit_strings)
+    # p_1_pos_1 = num_1s_pos_1 / len(bit_strings)
 
-    print(f'p_same_extra_bit = {p_same_extra_bit}')
-    print(f'p_0_0 = {p_0_0}')
-    print(f'p_0_1 = {p_0_1}')
-    print(f'p_1_0 = {p_1_0}')
-    print(f'p_1_1 = {p_1_1}')
-    print(f'same extra bit = {p_0_0 + p_1_1}')
+    # print(f'p_same_extra_bit = {p_same_extra_bit}')
+    # print(f'p_0_0 = {p_0_0}')
+    # print(f'p_0_1 = {p_0_1}')
+    # print(f'p_1_0 = {p_1_0}')
+    # print(f'p_1_1 = {p_1_1}')
+    # print(f'same extra bit = {p_0_0 + p_1_1}')
 
-    print(f'p_0_pos_0 = {p_0_pos_0}')
-    print(f'p_0_pos_1 = {p_0_pos_1}')
-    print(f'p_1_pos_0 = {p_1_pos_0}')
-    print(f'p_1_pos_1 = {p_1_pos_1}')
+    # print(f'p_0_pos_0 = {p_0_pos_0}')
+    # print(f'p_0_pos_1 = {p_0_pos_1}')
+    # print(f'p_1_pos_0 = {p_1_pos_0}')
+    # print(f'p_1_pos_1 = {p_1_pos_1}')
 
-    MI = p_0_0 * np.log2(p_0_0 / (p_0_pos_0 * p_0_pos_1)) + p_1_0 * np.log2(p_1_0 / (p_1_pos_0 * p_0_pos_1)) + p_0_1 * np.log2(p_0_1 / (p_0_pos_0 * p_1_pos_1)) + p_1_1 * np.log2(p_1_1 / (p_1_pos_1 * p_1_pos_1))
-    print(f'MI = {MI}') 
-    # 0.9192 for two bits with 0.99 correlation
-    # 0 for two bits with 0.5 correlation
+    # MI = p_0_0 * np.log2(p_0_0 / (p_0_pos_0 * p_0_pos_1)) + p_1_0 * np.log2(p_1_0 / (p_1_pos_0 * p_0_pos_1)) + p_0_1 * np.log2(p_0_1 / (p_0_pos_0 * p_1_pos_1)) + p_1_1 * np.log2(p_1_1 / (p_1_pos_1 * p_1_pos_1))
+    # print(f'MI = {MI}') 
+    # # 0.9192 for two bits with 0.99 correlation
+    # # 0 for two bits with 0.5 correlation
 
 
 

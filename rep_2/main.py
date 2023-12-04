@@ -38,7 +38,7 @@ f = train_model(trainloader)
 # from datetime import datetime
 
 
-torch.save(f.state_dict(), f'winner_save_v2.pt')
+torch.save(f.state_dict(), f'weird_model_learns_more_than_a_bit???.pt')
 
 
 # %%
@@ -102,40 +102,90 @@ parity_bit_decoder = train_parity_bit_decoder(trainloader, f)
 # %%
 
 # test the extra_bit decoder
+import matplotlib.pyplot as plt
+import numpy as np
 
 with torch.no_grad():
     for batch in trainloader:
-        x0 = batch[:100,0]
-        x1 = batch[:100,1]
+        x0 = batch[:1000,0]
+        x1 = batch[:1000,1]
 
         V1 = f(x1)
 
         extra_bits = x1[:,-1].unsqueeze(1)
 
-        print(extra_bits)
-        print(torch.round(extra_bit_decoder(V1)))
+        # print(extra_bits)
+        # print(torch.round(extra_bit_decoder(V1)))
         # print the accuracy of the decoder vs the extra bits ground truth
         print((torch.round(extra_bit_decoder(V1)) == extra_bits).float().mean())
+
+        zero_array = []
+        one_array = []
+
+
+        for i in range(1000):
+            # round Ve
+
+
+            print(f"{round(float(V1.squeeze()[i]),2)} - {extra_bits[i]}")
+
+            if extra_bits[i] == 0:
+                zero_array.append(V1[i])
+            else:
+                one_array.append(V1[i])
+
+        # plot a histogram of the values in V1 making zero and one arrays different colors
+        plt.hist(np.array(zero_array).flatten(), bins=20, label='zero', color='blue')
+        plt.hist(np.array(one_array).flatten(), bins=20, label='one', color='orange')
+        # print the height of the bins
+        plt.ylabel('Frequency')
+        plt.xlabel('f(extra bit)')    
+        plt.legend()
+        plt.show()
         break
 # %%
 
+import matplotlib.pyplot as plt
+import numpy as np
 
 # test the parity_bit decoder
 
 with torch.no_grad():
     for batch in trainloader:
-        x0 = batch[:100,0]
-        x1 = batch[:100,1]
+        x0 = batch[:1000,0]
+        x1 = batch[:1000,1]
 
         V1 = f(x1)
 
         parity_batch = torch.sum(x1[:,:5], dim=1) % 2
 
-        for i in range(15):
+        zero_array = []
+        one_array = []
+
+
+        for i in range(1000):
             # round Ve
 
 
             print(f"{round(float(V1.squeeze()[i]),2)} - {parity_batch[i]}")
+
+            if parity_batch[i] == 0:
+                zero_array.append(V1[i])
+            else:
+                one_array.append(V1[i])
+            
+        # plot a histogram of the values in V1 making zero and one arrays different colors
+        plt.hist(np.array(zero_array).flatten(), bins=20, label='zero', color='blue')
+        plt.hist(np.array(one_array).flatten(), bins=20, label='one', color='orange')
+        # print the height of the bins
+        plt.ylabel('Frequency')
+        plt.xlabel('f(parity bit)')
+        plt.legend()
+        plt.show()
+
+
+
+
 
         # print(parity_batch)
         # print(torch.round(parity_bit_decoder(V1)))
