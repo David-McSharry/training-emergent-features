@@ -4,14 +4,12 @@ import torch
 from trainers import (train_model,
                         train_extra_bit_decoder,
                         train_parity_bit_decoder,
-                        train_unsimilar_model,
                         train_extra_bit_decoder,
                         train_parity_bit_decoder,
-                        train_correlated_bit_critic
+                        train_unsimilar_model
                     )
-# packages may have been fucked up and need to be reinstalled :()
 
-batch_size = 1000
+batch_size = 500
 
 dataset = torch.load('datasets/bit_string_dataset_gp=0.99_ge=0.99_n=3e7.pth')
 trainloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
@@ -27,7 +25,60 @@ f = train_model(trainloader)
 
 # %%
 
-# g = train_correlated_bit_critic(trainloader)
+from models import SupervenientFeatureNetwork
+import numpy as np
+
+# load model
+
+model_A = SupervenientFeatureNetwork()
+model_A.load_state_dict(torch.load('models/winneRRRRR.pt'))
+model_A.eval()
+
+
+model_B = train_unsimilar_model(model_A, trainloader)
+
+
+# %%
+
+
+from models import SupervenientFeatureNetwork
+import numpy as np
+
+f1 = SupervenientFeatureNetwork()
+f1.load_state_dict(torch.load('models/winneRRRRR.pt'))
+
+f2 = SupervenientFeatureNetwork()
+f2.load_state_dict(torch.load('models/learned_parity_bit_f_VMI_only.pt'))
+
+for batch in trainloader:
+    x0 = batch[:100,0]
+    x1 = batch[:100,1]
+
+    V1 = f1(x1)
+    V2 = f2(x1)
+
+    for i in range(100):
+        print(f"{round(float(V1.squeeze()[i]),2)} - {round(float(V2.squeeze()[i]),2)}")
+        
+        
+
+# %%
+
+# load the representations
+A_reps = torch.load('datasets/A_reps.pth')
+A_reps_dataloarder = torch.utils.data.DataLoader(A_reps, batch_size=batch_size, shuffle=False)
+
+
+for batch in trainloader:
+    print(batch.shape)
+    break
+
+for batch in A_reps_dataloarder:
+    print(batch.shape)
+    break
+
+
+
 
 
 
@@ -152,8 +203,8 @@ import numpy as np
 
 with torch.no_grad():
     for batch in trainloader:
-        x0 = batch[:1000,0]
-        x1 = batch[:1000,1]
+        x0 = batch[:100,0]
+        x1 = batch[:100,1]
 
         V1 = f(x1)
 
@@ -163,7 +214,7 @@ with torch.no_grad():
         one_array = []
 
 
-        for i in range(1000):
+        for i in range(10):
             # round Ve
 
 
@@ -173,15 +224,27 @@ with torch.no_grad():
                 zero_array.append(V1[i])
             else:
                 one_array.append(V1[i])
-            
+
+        # convert from tensor to numpy array
+                
+        print(zero_array)
+        
+                
+        zero_array = np.round(np.array(zero_array),2)
+        one_array = np.round(np.array(one_array),2)
+
+        print(zero_array)
+        print(one_array)
+
         # plot a histogram of the values in V1 making zero and one arrays different colors
-        plt.hist(np.array(zero_array).flatten(), bins=20, label='zero', color='blue')
-        plt.hist(np.array(one_array).flatten(), bins=20, label='one', color='orange')
+        plt.hist(zero_array.flatten(), bins=200, label='zero', color='blue')
+        plt.hist(one_array.flatten(), bins=200, label='one', color='orange')
         # print the height of the bins
         plt.ylabel('Frequency')
         plt.xlabel('f(parity bit)')
         plt.legend()
         plt.show()
+
 
 
 

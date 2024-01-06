@@ -61,17 +61,42 @@ class MarginalSeparableCritic(nn.Module):
             nn.Linear(64, 8),
         )
 
-        self.W = nn.Linear(8, 8, bias=False)
-
     def forward(self, x0i, v1):
         v1_encoded = self.v_encoder(v1)
         x0i_encoded = self.xi_encoder(x0i)
-        v1_encoded_transformed = self.W(v1_encoded)
-
-        scores = torch.matmul(x0i_encoded, v1_encoded_transformed.t())
+        scores = torch.matmul(x0i_encoded, v1_encoded.t())
 
         return scores
+    
+class DifferentRepCritic(nn.Module):
+    """Separable critic. where the output value is g(x) h(y). """
+
+    def __init__(self):
+        super(DifferentRepCritic, self).__init__()
+        self.v_A_encoder = nn.Sequential(
+            nn.Linear(1, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Linear(64, 8),
+        )
+
+        self.v_B_encoder = nn.Sequential(
+            nn.Linear(1, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Linear(64, 8),
+        )
+
+    def forward(self, v0, v1):
+        v0_encoded = self.v_A_encoder(v0)
+        v1_encoded = self.v_B_encoder(v1)
+
+        scores = torch.matmul(v0_encoded, v1_encoded.t())
+        return scores
         
+
 
 class Decoder(nn.Module):
     def __init__(self):

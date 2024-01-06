@@ -1,9 +1,11 @@
 import torch
 
-def estimate_MI_smile(scores, clip):
+def estimate_MI_smile(scores):
     """
     Returns the MI estimate using the SMILE estimator given the scores matrix and a clip
     """
+    clip = 5
+    
     first_term = scores.diag().mean()
 
     batch_size = scores.size(0)
