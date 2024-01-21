@@ -1,12 +1,12 @@
 # %%
 import torch
 
-from trainers import (train_model,
+from trainers import (train_model_A,
                         train_extra_bit_decoder,
                         train_parity_bit_decoder,
                         train_extra_bit_decoder,
                         train_parity_bit_decoder,
-                        train_unsimilar_model
+                        train_unsimilar_model_smile
                     )
 
 batch_size = 500
@@ -18,7 +18,39 @@ trainloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffl
 # %%
 
 
-f = train_model(trainloader)
+# try out infoNCE
+from models import TestCritic
+import torch.optim as optim
+import wandb
+import torch
+from datetime import datetime
+from info_nce import infoNCE_estimator
+
+wandb.init(project="training-emergent-features", id=datetime.now().strftime("model-B-%Y%m%d-%H%M%S"))
+
+critic = TestCritic()
+opt_critic = optim.Adam(critic.parameters(), lr=1e-4)
+
+
+for batch in trainloader:
+    x0 = batch[:,0]
+    x1 = batch[:,1]
+
+    x0_extra_bit = x0[:, -1].unsqueeze(1)
+    x1_extra_bit = x1[:, -1].unsqueeze(1)
+
+    scores = critic(x0_extra_bit, x1_extra_bit)
+
+    MI = infoNCE_estimator(scores)
+
+    loss = - MI
+
+    opt_critic.zero_grad()
+    loss.backward()
+    opt_critic.step()
+
+    wandb.log({'MI': MI})
+
 
 
 
@@ -33,8 +65,9 @@ model_A = SupervenientFeatureNetwork()
 model_A.load_state_dict(torch.load('models/winneRRRRR.pt'))
 model_A.eval()
 
+model_B = train_unsimilar_model_smile(model_A, trainloader)
 
-model_B = train_unsimilar_model(model_A, trainloader)
+
 
 
 # %%
