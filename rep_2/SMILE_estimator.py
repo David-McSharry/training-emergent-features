@@ -16,7 +16,7 @@ def estimate_MI_smile(scores):
     # e^clipped_scores
     exp_clipped_scores = torch.exp(clipped_scores)
 
-    mask = torch.ones_like(exp_clipped_scores) - torch.eye(batch_size).to(device=exp_clipped_scores.device)
+    mask = (torch.ones_like(exp_clipped_scores) - torch.eye(batch_size)).to(device=exp_clipped_scores.device)
 
     masked_exp_clipped_scores = exp_clipped_scores * mask
 

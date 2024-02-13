@@ -72,7 +72,7 @@ def get_V1_AB_mutual_info_for_tracking(AB_critic, x, model_A, model_B):
     return V_AB_mutual_info
 
 
-def train_model(dataloader):
+def train_model_A(dataloader):
 
     pred_critic = PredSeparableCritic()
     marginal_critic = MarginalSeparableCritic()
@@ -153,7 +153,7 @@ def train_model(dataloader):
     return f
 
 
-def train_unsimilar_model(model_A, dataloader):
+def train_unsimilar_model_smile(model_A, dataloader):
 
     pred_critic = PredSeparableCritic()
     marginal_critic = MarginalSeperableCriticExpanded()
