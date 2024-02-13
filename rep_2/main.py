@@ -9,50 +9,10 @@ from trainers import (train_model_A,
                         train_unsimilar_model_smile
                     )
 
-batch_size = 500
+batch_size = 1000
 
 dataset = torch.load('datasets/bit_string_dataset_gp=0.99_ge=0.99_n=3e7.pth')
 trainloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
-
-
-# %%
-
-
-# try out infoNCE
-from models import TestCritic
-import torch.optim as optim
-import wandb
-import torch
-from datetime import datetime
-from info_nce import infoNCE_estimator
-
-wandb.init(project="training-emergent-features", id=datetime.now().strftime("model-B-%Y%m%d-%H%M%S"))
-
-critic = TestCritic()
-opt_critic = optim.Adam(critic.parameters(), lr=1e-4)
-
-
-for batch in trainloader:
-    x0 = batch[:,0]
-    x1 = batch[:,1]
-
-    x0_extra_bit = x0[:, -1].unsqueeze(1)
-    x1_extra_bit = x1[:, -1].unsqueeze(1)
-
-    scores = critic(x0_extra_bit, x1_extra_bit)
-
-    MI = infoNCE_estimator(scores)
-
-    loss = - MI
-
-    opt_critic.zero_grad()
-    loss.backward()
-    opt_critic.step()
-
-    wandb.log({'MI': MI})
-
-
-
 
 
 # %%
@@ -89,34 +49,143 @@ torch.save(model_B.state_dict(), f'models/SUCCESS_MODEL_B_{timestr}.pt')
 # %%
 
 
-# Compare encodings of a 6 digit set between two different models
-#
-#
-#
-#
 
-from models import SupervenientFeatureNetwork
-import numpy as np
 
-f1 = SupervenientFeatureNetwork()
-f1.load_state_dict(torch.load('models/winneRRRRR.pt'))
+# compare vCLUB and SMILE MI estimates
 
-f2 = SupervenientFeatureNetwork()
-f2.load_state_dict(torch.load('models/learned_parity_bit_f_VMI_only.pt'))
+
+from CLUB_estimator import CLUB
+import torch
+import wandb
+from SMILE_estimator import estimate_MI_smile
+import torch.nn as nn
+from datetime import datetime
+
+class TestCritic1(nn.Module):
+    """Separable critic. where the output value is g(x) h(y). """
+
+    def __init__(self, x_dim, y_dim):
+        super(TestCritic1, self).__init__()
+        self.encoder1 = nn.Sequential(
+            nn.Linear(x_dim, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Linear(64, 8),
+        )
+
+        self.encoder2 = nn.Sequential(
+            nn.Linear(y_dim, 128),
+            nn.ReLU(),
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Linear(64, 8),
+        )
+
+    def forward(self, thing1, thing2):
+        encoded1 = self.encoder1(thing1)
+        encoded2 = self.encoder2(thing2)
+        scores = torch.matmul(encoded1, encoded2.t())
+        return scores
+
+slices_of_bits = [
+    # '[all bits]',
+    # '[first 5 bits]',
+    '[extra bit]'
+]
+
+def prepare_batch(batch, batch_size, slice_name):
+    x0 = batch[:,0]
+    x1 = batch[:,1]
+    if slice_name == '[all bits]':
+        x,y = x0, x1
+        assert x.shape[1] == 6 and y.shape[1] == 6
+        return x,y
+    elif slice_name == '[first 5 bits]':
+        x, y = x0[:,:5], x1[:,:5]
+        assert x.shape[1] == 5 and y.shape[1] == 5
+        return x,y
+    elif slice_name == '[extra bit]':
+        x, y = x0[:,-1].unsqueeze(1), x1[:,-1].unsqueeze(1)
+        assert x.shape[1] == 1 and y.shape[1] == 1
+        return x,y
+
+run_id = datetime.now().strftime("%Y%m%d-%H%M%S")
+wandb.init(project="training-emergent-features", id=run_id)
+
+for slice_name in slices_of_bits:
+
+    if slice_name == '[all bits]':
+        x_dim = 6
+        y_dim = 6
+    elif slice_name == '[first 5 bits]':
+        x_dim = 5
+        y_dim = 5
+    elif slice_name == '[extra bit]':
+        x_dim = 1
+        y_dim = 1
+
+    club = CLUB(x_dim, y_dim, 64)
+    smile_critic = TestCritic1(x_dim, y_dim)
+
+    club_optimizer = torch.optim.Adam(club.parameters(), lr=1e-4)
+    smile_critic_optimizer = torch.optim.Adam(smile_critic.parameters(), lr=1e-4)
+
+
+    batch_size = trainloader.batch_size
+
+    i = 0
+    for batch in trainloader:
+        
+        x_sample, y_sample = prepare_batch(batch, batch_size, slice_name)
+
+        smile_critic.zero_grad()
+        smile_scores = smile_critic(x_sample, y_sample)
+        smile_MI = estimate_MI_smile(smile_scores)
+        smile_loss = - smile_MI
+        smile_loss.backward()
+        smile_critic_optimizer.step()
+
+        club.zero_grad()
+        club_loss = club.learning_loss(x_sample, y_sample)
+        club_loss.backward()
+        club_optimizer.step()
+        club_MI_estimation = club.forward(x_sample, y_sample)
+
+        wandb.log({f"{slice_name} - vCLUB MI": club_MI_estimation.item()})
+        wandb.log({f"{slice_name} - SMILE MI": smile_MI.item()})
+        wandb.log({f"{slice_name} - vCLUB loss": club_loss.item()})
+
+        i += 1
+
+        if i > 1000:
+            break
+
+
+# %%
+        
+
+
 
 for batch in trainloader:
-    x0 = batch[:100,0]
-    x1 = batch[:100,1]
+    x_sample, y_sample = prepare_batch(batch, batch_size, '[extra bit]')
+    print(club.get_mu_logvar(x_sample[2]))
 
-    V1 = f1(x1)
-    V2 = f2(x1)
-
-    for i in range(100):
-        print(f"{round(float(V1.squeeze()[i]),2)} - {round(float(V2.squeeze()[i]),2)}")
-    
+    print(x_sample[2])
+    break
 
 
+        
 
+
+
+
+
+
+
+
+
+# %%
 
 # %%
         
@@ -404,5 +473,7 @@ with torch.no_grad():
     
 
 # %%
+
+
 
 
