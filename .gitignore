@@ -2,4 +2,4 @@
 __pycache__
 wandb
 data
-rep_2/datasets
+toy_bit_dataset/datasets
