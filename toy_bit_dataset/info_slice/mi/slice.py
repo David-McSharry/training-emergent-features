@@ -22,7 +22,7 @@ class SliceInfominLayer(base.ParametricInfoEstimator):
         super().__init__(hyperparams=hyperparams)
         self.architecture = architecture
         self.n_slice = hyperparams.get('n_slice', 200)
-e        self.slice_mode = hyperparams.get('slice_mode', 'sphere')
+        self.slice_mode = hyperparams.get('slice_mode', 'sphere')
 
         self.bs = 500
         self.lr = 1e-3

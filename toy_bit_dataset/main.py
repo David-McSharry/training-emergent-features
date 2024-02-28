@@ -1,6 +1,6 @@
 # %%
 import torch
-
+import matplotlib.pyplot as plt
 from trainers import (train_model_A,
                         train_extra_bit_decoder,
                         train_parity_bit_decoder,
@@ -8,11 +8,62 @@ from trainers import (train_model_A,
                         train_parity_bit_decoder,
                         train_unsimilar_model_smile
                     )
+import mutual_information as mi
+import numpy as np
+
+
+import lovely_tensors as lt
+
+lt.monkey_patch()
 
 batch_size = 1000
 
-dataset = torch.load('datasets/bit_string_dataset_gp=0.99_ge=0.99_n=3e7.pth')
-trainloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
+# dataset = torch.load('datasets/bit_string_dataset_gp=0.99_ge=0.99_n=3e7.pth')
+
+dataset = torch.load('../ecog_experiment/data/ecog_dataset.pth')
+
+dataset0 = dataset[:-1]
+dataset1 = dataset[1:]
+# stack
+dataset = torch.stack((dataset0, dataset1), dim=1).float()
+
+X = dataset[:,0]
+Y = dataset[:,1]
+
+print(X[:5000, :2].shape)
+
+I = mi.pyMIestimator(X[:5000, :2], Y[:5000]) #default k = 5, base = np.exp(1)
+
+print('mutual information:', I)
+
+ch0 = X[:,0]
+
+I_0 = mi.pyMIestimator(ch0[:5000], Y[:5000]) #default k = 5, base = np.exp(1)   
+
+print('mutual information with first atom', I_0)
+
+ch2 = X[:,2]
+
+I_2 = mi.pyMIestimator(ch2[:5000], Y[:5000]) #default k = 5, base = np.exp(1)
+
+print('mutual information with third atom', I_2)
+
+# mutual info of third and first atom 
+
+I_2_0 = mi.pyMIestimator(ch2[:5000], ch0[:5000]) #default k = 5, base = np.exp(1)
+
+print('mutual information with third and first atom', I_2_0)
+
+# repeat the dataset 100 times
+dataset = dataset.repeat(100, 1, 1)
+
+trainloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False)
+
+
+# %%
+
+# train model A
+model_A = train_model_A(trainloader)
 
 
 
@@ -137,10 +188,14 @@ for slice_name in slices_of_bits:
     club = CLUB(x_dim, y_dim, 64)
     smile_critic = TestCritic1(x_dim, y_dim)
     binary_club = BinaryCLUB()
+    binary_club_with_BCE_loss = BinaryCLUB()
 
-    club_optimizer = torch.optim.Adam(club.parameters(), lr=1e-3)
-    smile_critic_optimizer = torch.optim.Adam(smile_critic.parameters(), lr=1e-2)
-    binary_club_optimizer = torch.optim.Adam(binary_club.parameters(), lr=1e-3)
+    bce_loss = nn.BCELoss()
+
+    club_optimizer = torch.optim.Adam(club.parameters(), lr=1e-4)
+    smile_critic_optimizer = torch.optim.Adam(smile_critic.parameters(), lr=1e-4)
+    binary_club_optimizer = torch.optim.Adam(binary_club.parameters(), lr=1e-4)
+    binary_club_with_BCE_loss_optimizer = torch.optim.Adam(binary_club_with_BCE_loss.parameters(), lr=1e-4)
 
 
     batch_size = trainloader.batch_size
@@ -169,13 +224,24 @@ for slice_name in slices_of_bits:
         binary_club_optimizer.step()
         binary_club_MI_estimation = binary_club.MI(x_sample, y_sample)
 
+        binary_club_with_BCE_loss.zero_grad()
+        y_pred = binary_club_with_BCE_loss.forward(x_sample)
+        loss = bce_loss(y_pred, y_sample)
+        loss.backward()
+        binary_club_with_BCE_loss_optimizer.step()
+        binary_club_with_BCE_loss_MI_estimation = binary_club_with_BCE_loss.MI(x_sample, y_sample)
+
         # print(f"{x_sample[0]} - {y_sample[0]} - {torch.exp(binary_club.learning_loss(x_sample[0], y_sample[0]))}")
 
         wandb.log({f"{slice_name} - vCLUB MI": club_MI_estimation.item()})
         wandb.log({f"{slice_name} - SMILE MI": smile_MI.item()})
-        wandb.log({f"{slice_name} - vCLUB loss": club_loss.item()})
         wandb.log({f"{slice_name} - Binary CLUB MI": binary_club_MI_estimation.item()})
+        wandb.log({f"{slice_name} - Binary CLUB with BCE loss MI": binary_club_with_BCE_loss_MI_estimation.item()})
+
+        wandb.log({f"{slice_name} - vCLUB loss": club_loss.item()})
         wandb.log({f"{slice_name} - Binary CLUB loss": binary_club_loss.item()})
+        wandb.log({f"{slice_name} - Binary CLUB with BCE loss loss": loss.item()})
+        wandb.log({f"{slice_name} - SMILE loss": smile_loss.item()})
 
         i += 1
 

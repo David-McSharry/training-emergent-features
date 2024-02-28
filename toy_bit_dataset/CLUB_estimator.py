@@ -67,6 +67,9 @@ class BinaryCLUB(nn.Module):
             nn.Linear(16, 1),
             nn.Sigmoid()
         )
+
+    def forward(self, x):
+        return self.prob_of_1_net(x)
         
     def learning_loss(self, x, y):
 
@@ -77,6 +80,13 @@ class BinaryCLUB(nn.Module):
         y_pred = torch.where(y == 0, 1 - y_pred, y_pred)
         log_prob = torch.log2(y_pred)
         return - log_prob.mean()
+    
+    def BCE_loss(self, x, y):
+
+        y_pred = self.prob_of_1_net(x)
+        loss = nn.BCELoss()
+        return loss(y_pred, y)
+
     
     def MI(self, x, y):
         y_pred = self.prob_of_1_net(x)
@@ -89,11 +99,6 @@ class BinaryCLUB(nn.Module):
         positive_term = log_prob.mean()
 
         y_shuffled = y[torch.randperm(y.size(0))]
-        print('...')
-        print(x.squeeze(1).eq(y_shuffled).sum() / x.nelement())
-        print(x.squeeze(1).eq(y_shuffled)[:5])
-        print(x.squeeze(1)[:6])
-        print(y_shuffled[:6])
     
         y_pred = self.prob_of_1_net(x)
         y_pred = rearrange(y_pred, 'i 1 -> i')

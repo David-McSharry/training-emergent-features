@@ -39,7 +39,12 @@ mi_estimator = mi.SliceInfominLayer([data_dim, hyperparams.n_slice, data_dim], h
 
 batch_size = 1000
 
-dataset = torch.load('/Users/davidmcsharry/dev/imperial/training-emergent-features/rep_2/datasets/bit_string_dataset_gp=0.99_ge=0.99_n=3e7.pth')
+dataset = torch.load('/Users/davidmcsharry/dev/imperial/training-emergent-features/ecog_experiment/data/ecog_dataset.pth')
+dataset0 = dataset[:-1]
+dataset1 = dataset[1:]
+# stack
+dataset = torch.stack((dataset0, dataset1), dim=1).float()
+
 trainloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
 
@@ -48,7 +53,7 @@ trainloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffl
 # sampler_optimizer = torch.optim.Adam(sampler.parameters(), lr = hyperparams.lr)
 
 # # estimator for I(x, y)
-mi_estimator = mi.SliceInfominLayer([1, hyperparams.n_slice, 1], hyperparams=hyperparams).to(device)
+mi_estimator = mi.SliceInfominLayer([6, hyperparams.n_slice, 6], hyperparams=hyperparams).to(device)
 
 def estimate_MI_smile(scores):
     """
@@ -96,20 +101,20 @@ for batch in trainloader:
     x0 = batch[:,0]
     x1 = batch[:,1]
 
-    batch_len = x1.shape[0]
+    # batch_len = x1.shape[0]
 
-    one_hot_encoding = F.one_hot(torch.tensor([0,1,2,3,4,5])).unsqueeze(0).repeat(batch_len, 1, 1)
-    x0_with_one_hot = torch.cat((x0.unsqueeze(2), one_hot_encoding), dim=2)
+    # one_hot_encoding = F.one_hot(torch.tensor([0,1,2,3,4,5])).unsqueeze(0).repeat(batch_len, 1, 1)
+    # x0_with_one_hot = torch.cat((x0.unsqueeze(2), one_hot_encoding), dim=2)
 
-    x0_extra_bit_with_one_hot = x0_with_one_hot[:,-1,:]
+    # x0_extra_bit_with_one_hot = x0_with_one_hot[:,-1,:]
 
-    x1_exta_bit = x1[:,-1].unsqueeze(1)
-    x0_extra_bit = x0[:,-1].unsqueeze(1)
+    # x1_exta_bit = x1[:,-1].unsqueeze(1)
+    # x0_extra_bit = x0[:,-1].unsqueeze(1)
 
-    print(x0_extra_bit_with_one_hot.shape)
+    # print(x0_extra_bit_with_one_hot.shape)
 
-    print(x1_exta_bit.shape)
-    print(mi_estimator.learn(x0_extra_bit, g(x1_exta_bit)))
+    # print(x1_exta_bit.shape)
+    print(mi_estimator.learn(x0, x1))
 
     break
 

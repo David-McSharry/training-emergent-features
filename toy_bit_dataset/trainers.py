@@ -8,11 +8,12 @@ from models import (SupervenientFeatureNetwork,
                     MarginalSeparableCritic,
                     MarginalSeperableCriticExpanded,
                     DifferentRepCritic)
+
+from CLUB_estimator import CLUB
 from models import Decoder
 import torch.nn as nn
 from tqdm import tqdm
 from SMILE_estimator import estimate_MI_smile
-
 
 # TODO bro optomize this, you are calling f so many times lmaooo
 def get_sum_downward_causation_terms(marginal_critic, x_one_hot, V1_B):
@@ -27,6 +28,22 @@ def get_sum_downward_causation_terms(marginal_critic, x_one_hot, V1_B):
 
     return sum_margininal_MIs
 
+def get_sum_downward_causation_terms_A(marginal_critic, x_one_hot, x1, f):
+    """
+    Sigma_i I( X_i_t0 ; V_t1_B)
+    X_i_t0 is (batch_size, 6, 8) because 
+    """
+    V1 = f(x1)
+    sum_margininal_MIs = 0
+    for i in range(6):
+        scores = marginal_critic(x_one_hot[:,i], V1)
+        sum_margininal_MIs += estimate_MI_smile(scores)
+
+        print('downward scores:    ', scores)
+
+    return sum_margininal_MIs
+
+
 def get_V1_AB_MI(marginal_critic, V1_A, V1_B):
     """
     Finds I( V1_A ; V1_B )
@@ -34,6 +51,9 @@ def get_V1_AB_MI(marginal_critic, V1_A, V1_B):
     V1_B is (batch_size, 1)
     """
     scores = marginal_critic(V1_A, V1_B)
+
+
+    print('decoupled scores:    ', scores)
 
     return estimate_MI_smile(scores)
 
@@ -75,7 +95,9 @@ def get_V1_AB_mutual_info_for_tracking(AB_critic, x, model_A, model_B):
 def train_model_A(dataloader):
 
     pred_critic = PredSeparableCritic()
-    marginal_critic = MarginalSeparableCritic()
+    # marginal_critic = MarginalSeparableCritic()
+
+    marginal_critic = CLUB(7, 1, 64)
     
     f = SupervenientFeatureNetwork()
 
@@ -117,7 +139,7 @@ def train_model_A(dataloader):
         # pred terms
 
         V_mutual_info = get_causally_decoupled_MI(pred_critic, x0, x1, f)
-        g_loss = - V_mutual_info
+        g_loss = - V_mutual_info 
 
         opt_pred.zero_grad()
         g_loss.backward(retain_graph=True)
@@ -126,27 +148,42 @@ def train_model_A(dataloader):
 
         # marginal terms
 
-        sum_margininal_MIs = get_sum_downward_causation_terms(marginal_critic, x0_with_one_hot, x1, f)
-        marginal_loss = - sum_margininal_MIs
+        # sum_margininal_MIs = get_sum_downward_causation_terms_A(marginal_critic, x0_with_one_hot, x1, f)
+
+        # marginal_loss = - sum_margininal_MIs
+
+        # opt_marginal.zero_grad()
+        # marginal_loss.backward(retain_graph=True)
+        # opt_marginal.step()
+
+        marginal_loss = 0
+
+        for i in range(6):
+            marginal_loss += marginal_critic.learning_loss(x0_with_one_hot[:,i], f(x1))
 
         opt_marginal.zero_grad()
         marginal_loss.backward(retain_graph=True)
         opt_marginal.step()
 
 
-        # f
+        marginal_MI = 0
 
-        psi = get_causally_decoupled_MI(pred_critic, x0, x1, f) - get_sum_downward_causation_terms(marginal_critic, x0_with_one_hot, x1, f)
+        for i in range(6):
+            marginal_MI += marginal_critic(x0_with_one_hot[:,i], f(x1))
+
+
+        # f
+        psi = get_causally_decoupled_MI(pred_critic, x0, x1, f) - marginal_MI # - get_sum_downward_causation_terms_A(marginal_critic, x0_with_one_hot, x1, f)
         f_loss = - psi
 
         opt_f.zero_grad()
         f_loss.backward()
         opt_f.step()
 
-
         wandb.log({'Psi': psi.item()})
-        wandb.log({'Sum of Marginal MIs': sum_margininal_MIs.item()})
+        wandb.log({'Sum of Marginal MIs': marginal_MI.item()})
         wandb.log({'V Mutual Info': V_mutual_info.item()})
+        wandb.log({'marginall loss': marginal_loss.item()})
 
     wandb.finish()
 
