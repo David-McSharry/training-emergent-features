@@ -118,10 +118,11 @@ def train_model_A(dataloader):
     wandb.watch(f)
 
     # init optimizer
-    opt_pred = optim.Adam(pred_critic.parameters(), lr=1e-4)
+    opt_pred = optim.Adam(pred_critic.parameters(), lr=1e-5)
     opt_marginal = optim.Adam(marginal_critic.parameters(), lr=1e-4)
     opt_f = optim.Adam(f.parameters(), lr=1e-5)
     
+    j = 0
     for batch in tqdm(dataloader):
 
         x0 = batch[:,0]
@@ -171,6 +172,9 @@ def train_model_A(dataloader):
         for i in range(6):
             marginal_MI += marginal_critic(x0_with_one_hot[:,i], f(x1))
 
+        j += 1
+        if j >2000:
+            break
 
         # f
         psi = get_causally_decoupled_MI(pred_critic, x0, x1, f) - marginal_MI # - get_sum_downward_causation_terms_A(marginal_critic, x0_with_one_hot, x1, f)

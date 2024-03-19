@@ -163,7 +163,7 @@ from ecog_experiment.utils import prepare_ecog_dataset
 print(os.getcwd())
 
 config_preprocessing = {
-    'dim_reduction': 'PCA',
+    'dim_reduction': 'None',
     'n_components': 10
 }
 
@@ -194,15 +194,17 @@ from ecog_experiment.utils import prepare_ecog_dataset
 print(os.getcwd())
 
 config_preprocessing = {
-    'dim_reduction': 'PCA',
-    'n_components': 10
+    'dim_reduction': 'None',
+    'n_components': 6
 }
 
 prepare_ecog_dataset(config_preprocessing)
 
 dataset = torch.load('ecog_experiment/data/ecog_dataset.pth')
 
-ch1 = dataset[:, 0]
+
+# %%
+ch1 = dataset[:, 5]
 # to numpy
 fft_check(ch1.numpy(), 300)
 

@@ -9,22 +9,21 @@ import torch.optim as optim
 from utils import prepare_batch
 
 
-
 config = {
-    'dataset_path': '../toy_bit_dataset/datasets/bit_string_dataset_gp=0.99_ge=0.99_n=3e7.pth',
-    'batch_size': 1000,
+    'dataset_path': 'data/ecog_dataset.pth',
+    'batch_size': 100,
     'num_features' : 6,
     'V_dim' : 1,
     'f_config': {
-        'lr': 10e-5
+        'lr': 1e-4
     },
     'downward_config': {
         'critic_output_dim': 8,
-        'lr': 10e-4
+        'lr': 1e-4
     },
     'decoupled_config': {
         'critic_output_dim': 8,
-        'lr': 10e-4
+        'lr': 1e-5
     }
 }
 
@@ -58,7 +57,7 @@ wandb.watch(decoupled)
 wandb.watch(f)
 
 for batch in trainloader:
-    # batch = prepare_batch(batch)
+    batch = prepare_batch(batch)
     X0 = batch[:, 0].float()
     X1 = batch[:, 1].float()
 

@@ -104,6 +104,8 @@ def prepare_batch(X):
 
     # stack them as pairs with dimension (999, 2, 10)
     pairs = torch.stack((input_data, target_data), dim=1)
+    
+    assert pairs[0,0,0] == input_data[0,0]
 
     return pairs
 

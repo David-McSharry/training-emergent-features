@@ -4,14 +4,19 @@ def estimate_MI_smile(scores):
     """
     Returns the MI estimate using the SMILE estimator given the scores matrix and a clip
     """
-    clip = 5
+    # clip = 99999999999
+
+    # take the absolute value of the scores and mean
+    positive_scores = torch.abs(scores)
+    print(torch.mean(positive_scores))
     
     first_term = scores.diag().mean()
 
     batch_size = scores.size(0)
 
     # clip scores between -clip and clip
-    clipped_scores = torch.clamp(scores, -clip, clip)
+    # clipped_scores = torch.clamp(scores, -clip, clip)
+    clipped_scores = scores
 
     # e^clipped_scores
     exp_clipped_scores = torch.exp(clipped_scores)

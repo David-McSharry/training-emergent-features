@@ -20,44 +20,44 @@ batch_size = 1000
 
 # dataset = torch.load('datasets/bit_string_dataset_gp=0.99_ge=0.99_n=3e7.pth')
 
-dataset = torch.load('../ecog_experiment/data/ecog_dataset.pth')
+dataset = torch.load('datasets/bit_string_dataset_gp=0.99_ge=0.99_n=3e7.pth')
 
-dataset0 = dataset[:-1]
-dataset1 = dataset[1:]
-# stack
-dataset = torch.stack((dataset0, dataset1), dim=1).float()
+# dataset0 = dataset[:-1]
+# dataset1 = dataset[1:]
+# # stack
+# dataset = torch.stack((dataset0, dataset1), dim=1).float()
 
-X = dataset[:,0]
-Y = dataset[:,1]
+# X = dataset[:,0]
+# Y = dataset[:,1]
 
-print(X[:5000, :2].shape)
+# print(X[:5000, :2].shape)
 
-I = mi.pyMIestimator(X[:5000, :2], Y[:5000]) #default k = 5, base = np.exp(1)
+# I = mi.pyMIestimator(X[:5000, :2], Y[:5000]) #default k = 5, base = np.exp(1)
 
-print('mutual information:', I)
+# print('mutual information:', I)
 
-ch0 = X[:,0]
+# ch0 = X[:,0]
 
-I_0 = mi.pyMIestimator(ch0[:5000], Y[:5000]) #default k = 5, base = np.exp(1)   
+# I_0 = mi.pyMIestimator(ch0[:5000], Y[:5000]) #default k = 5, base = np.exp(1)   
 
-print('mutual information with first atom', I_0)
+# print('mutual information with first atom', I_0)
 
-ch2 = X[:,2]
+# ch2 = X[:,2]
 
-I_2 = mi.pyMIestimator(ch2[:5000], Y[:5000]) #default k = 5, base = np.exp(1)
+# I_2 = mi.pyMIestimator(ch2[:5000], Y[:5000]) #default k = 5, base = np.exp(1)
 
-print('mutual information with third atom', I_2)
+# print('mutual information with third atom', I_2)
 
-# mutual info of third and first atom 
+# # mutual info of third and first atom 
 
-I_2_0 = mi.pyMIestimator(ch2[:5000], ch0[:5000]) #default k = 5, base = np.exp(1)
+# I_2_0 = mi.pyMIestimator(ch2[:5000], ch0[:5000]) #default k = 5, base = np.exp(1)
 
-print('mutual information with third and first atom', I_2_0)
+# print('mutual information with third and first atom', I_2_0)
 
-# repeat the dataset 100 times
-dataset = dataset.repeat(100, 1, 1)
+# # repeat the dataset 100 times
+# dataset = dataset.repeat(100, 1, 1)
 
-trainloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False)
+trainloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
 
 # %%
@@ -287,8 +287,10 @@ for batch in trainloader:
 import matplotlib.pyplot as plt
 import numpy as np
 
-f = SupervenientFeatureNetwork()
-f.load_state_dict(torch.load('models/SUCCESS_MODEL_B_20240217-012416.pt'))
+# f = SupervenientFeatureNetwork()
+# f.load_state_dict(torch.load('models/SUCCESS_MODEL_B_20240217-012416.pt'))
+
+f = model_A
 
 with torch.no_grad():
     for batch in trainloader:
@@ -446,8 +448,11 @@ parity_bit_decoder = train_parity_bit_decoder(trainloader, f)
 #
 #
 
-f = SupervenientFeatureNetwork()
-f.load_state_dict(torch.load('models/SUCCESS_MODEL_B_3.pt'))
+# f = SupervenientFeatureNetwork()
+# f.load_state_dict(torch.load('models/SUCCESS_MODEL_B_3.pt'))
+
+
+f = model_A
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -510,8 +515,12 @@ get_MI_between_f_representation_and_parity_bit(f, trainloader)
         
 
 
-f = SupervenientFeatureNetwork()
-f.load_state_dict(torch.load('models/SUCCESS_MODEL_B_3.pt'))
+# f = SupervenientFeatureNetwork()
+# f.load_state_dict(torch.load('models/SUCCESS_MODEL_B_3.pt'))
+
+
+
+f = model_A
 
 
 

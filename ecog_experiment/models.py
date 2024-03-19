@@ -3,6 +3,10 @@ import torch.nn as nn
 from SMILE_estimator import estimate_MI_smile
 from einops import rearrange, reduce, repeat
 
+
+
+# This is just straight up broken it seems lol
+
 class DecoupledCausationMI(nn.Module):
     def __init__(self):
         super(DownwardCausationMI, self).__init__()
@@ -27,9 +31,6 @@ class DownwardCausationMI(nn.Module):
     def learning_loss(self):
         raise NotImplementedError("This is an abstract class")
 
-
-
-
     
 class SupervenientEncoder(nn.Module):
     def __init__(self, num_features, V_dim):
@@ -53,7 +54,7 @@ class SupervenientEncoder(nn.Module):
         decoupled_MI = decoupled.get_MI(V0, V1)
         downward_MI = downward.get_sum_MI(X0, V1)
 
-        return - (decoupled_MI - downward_MI)
+        return - (decoupled_MI - downward_MI) + 0.01 * torch.norm(self.f[0].weight, p=2) ** 2
             
 
 class DownwardSmile(DownwardCausationMI):
@@ -80,6 +81,7 @@ class DownwardSmile(DownwardCausationMI):
     
     def forward(self):
         return None
+
     def get_single_marginal_MI(self, x0i_with_oh, V1):
         # gets the MI between our emeergent featuere and a single atom
         # x0i_with_oh is (batch_size, num_atoms + 1)
@@ -87,7 +89,7 @@ class DownwardSmile(DownwardCausationMI):
         x0i_encoded = self.xi_encoder(x0i_with_oh)
         scores = torch.matmul(x0i_encoded, V1_encoded.t())
         return estimate_MI_smile(scores)
-    
+
     def get_sum_MI(self, X0, V1):
 
         def _add_one_hot(X0):
@@ -111,7 +113,7 @@ class DownwardSmile(DownwardCausationMI):
 
     def learning_loss(self, X0, V1):
         # X0 is (batch_size, num_atoms)
-        return - self.get_sum_MI(X0, V1)
+        return - self.get_sum_MI(X0, V1) + 0.1*(torch.norm(self.xi_encoder[0].weight, p=2) ** 2 + torch.norm(self.v_encoder[0].weight, p=2) ** 2)
     
 
 
@@ -133,16 +135,21 @@ class DecoupledSmile(DecoupledCausationMI):
         V0_encoded = self.v_encoder(V0) # (batch_size, critic_ouput_dim)
         V1_encoded = self.W (self.v_encoder(V1)) # (batch_size, critic_ouput_dim)
 
-        scores = torch.einsum('ij,jk->ik', [V0_encoded, (V1_encoded).T])
+        scores = torch.matmul(V0_encoded, V1_encoded.t())
 
         return estimate_MI_smile(scores)
 
     def learning_loss(self, V0, V1):
-        return - self.get_MI(V0, V1)
+        # plus regularization term times a small constant
+        return - self.get_MI(V0, V1) + 0.01 * torch.norm(self.W.weight, p=2) ** 2
     
     
     def forward(self):
         return None
+    
+
+
+
 
 
 
